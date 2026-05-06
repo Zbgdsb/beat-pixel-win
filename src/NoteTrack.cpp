@@ -94,32 +94,58 @@ void NoteTrack::draw() {
 
 /**
  * @brief 处理该轨道的按键按下事件
- * @details 遍历轨道内未判定的音符，找到时间上最接近的音符进行判定
- *          优先判定距离判定线最近的音符（即judgeTime最接近pressTime的）
+ * @details 三层判定逻辑：
+ *          1. ±150ms内有音符 -> 正常判定(Perfect/Good/Miss)
+ *          2. ±300ms内有音符但不在判定窗口 -> 按早了/按晚了，扣分(MISS)
+ *          3. 300ms内无音符 -> 乱按，扣分(MISS)
+ *          防止玩家无脑同时按住所有键刷分
  * @param pressTime 按键按下的时间戳(ms)
- * @return 判定结果（PERFECT/GOOD/MISS/NONE）
+ * @return 判定结果
  */
 Judgement NoteTrack::handlePress(long long pressTime) {
     Note* closestNote = nullptr;
     long long minDiff = LLONG_MAX;
+    bool hasNearbyNote = false; // 300ms内是否有未判定音符
 
-    // 找到时间上最接近按键时刻的未判定音符
     for (auto& note : notes) {
         if (note->getIsJudged()) continue;
 
         long long diff = std::abs(pressTime - note->getJudgeTime());
-        // 只考虑在判定窗口内（±150ms）的音符
+
+        // 300ms内有音符（不管是否在判定窗口）
+        if (diff <= 300) {
+            hasNearbyNote = true;
+        }
+
+        // 150ms判定窗口内 -> 正常判定
         if (diff <= 150 && diff < minDiff) {
             minDiff = diff;
             closestNote = note.get();
         }
     }
 
-    // 找到可判定的音符，执行判定
+    // 情况1：判定窗口内有音符，正常判定
     if (closestNote) {
         return closestNote->judge(pressTime);
     }
 
-    // 按键时该轨道没有可判定的音符，返回NONE（不扣分）
-    return NONE;
+    // 情况2：300ms内有音符但不在判定窗口 -> 按早了/按晚了，标记该音符为MISS
+    if (hasNearbyNote) {
+        // 找到最近的未判定音符，标记为已判定（避免过线后重复计MISS）
+        Note* nearest = nullptr;
+        long long nearestDiff = LLONG_MAX;
+        for (auto& note : notes) {
+            if (note->getIsJudged()) continue;
+            long long diff = std::abs(pressTime - note->getJudgeTime());
+            if (diff < nearestDiff) {
+                nearestDiff = diff;
+                nearest = note.get();
+            }
+        }
+        if (nearest) nearest->markJudged();
+        return MISS;
+    }
+
+    // 情况3：300ms内无音符 -> 乱按，直接扣分
+    return MISS;
 }
