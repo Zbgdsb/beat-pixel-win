@@ -36,6 +36,7 @@
 // ========== EasyX常量定义 ==========
 #define PS_SOLID 0
 #define VK_ESCAPE 27
+#define VK_RETURN 13
 
 // ========== 全局SFML窗口和状态 =/
 namespace _easyx_impl {
@@ -357,6 +358,9 @@ inline SHORT GetAsyncKeyState(int vKey) {
     // 特殊键
     else if (vKey == 27) {
         key = sf::Keyboard::Key::Escape;
+    }
+    else if (vKey == 13) {
+        key = sf::Keyboard::Key::Enter;
     }
 
     if (key != sf::Keyboard::Key::Unknown) {

@@ -23,4 +23,5 @@ public:
     void update(long long currentTime, ScoreSystem& scoreSystem);
     void draw();
     Judgement handlePress(long long pressTime); // 处理该轨道按键按下
+    bool isEmpty() const { return notes.empty(); } // 检测轨道是否无音符
 };
