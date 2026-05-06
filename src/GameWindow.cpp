@@ -142,6 +142,12 @@ bool GameWindow::init() {
  *          使用EasyX的GetAsyncKeyState异步检测，支持多键同时按下
  */
 void GameWindow::handleInput() {
+    // 处理SFML窗口事件（关闭等）
+    if (!processWindowEvents()) {
+        isRunning = false;
+        return;
+    }
+
     // 检测4个轨道按键 (A=0x41, S=0x53, D=0x44, F=0x46)
     for (int i = 0; i < TRACK_COUNT; i++) {
         // 使用GetAsyncKeyState检测按键状态
@@ -303,6 +309,7 @@ void GameWindow::run() {
 
         // 1. 处理输入
         handleInput();
+        if (!isRunning) break;
 
         // 2. 更新游戏状态
         update();

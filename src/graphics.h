@@ -54,18 +54,19 @@ namespace _easyx_impl {
     inline sf::Font g_font;
     inline bool g_fontLoaded = false;
 
-    // 按键状态缓存（用于GetAsyncKeyState模拟）
-    inline std::map<sf::Keyboard::Key, bool> g_keyStates;
-    inline std::map<sf::Keyboard::Key, bool> g_keyPressedThisFrame;
+    // 窗口是否还开着
+    inline bool g_windowOpen = false;
 
     // 加载字体（优先查找系统字体）
     inline bool loadFont() {
         if (g_fontLoaded) return true;
         // macOS常见中文字体路径
         const char* fontPaths[] = {
-            "/System/Library/Fonts/PingFang.ttc",
             "/System/Library/Fonts/STHeiti Medium.ttc",
-            "/System/Library/Fonts/Helvetica.ttc",
+            "/System/Library/Fonts/Hiragino Sans GB.ttc",
+            "/System/Library/Fonts/Menlo.ttc",
+            "/System/Library/Fonts/HelveticaNeue.ttc",
+            "/Library/Fonts/Arial Unicode.ttf",
             "/Library/Fonts/Arial.ttf",
             "/System/Library/Fonts/Monaco.dfont",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", // Linux
@@ -124,10 +125,11 @@ inline sf::Color toSfColor(COLORREF c) {
  */
 inline void initgraph(int width, int height) {
     using namespace _easyx_impl;
-    if (g_window) delete g_window;
+    if (g_window) { delete g_window; g_window = nullptr; }
     g_window = new sf::RenderWindow(sf::VideoMode({(unsigned)width, (unsigned)height}),
                                      "BeatPixel");
     g_window->setFramerateLimit(120); // 帧率由游戏主循环控制
+    g_windowOpen = true;
     loadFont();
 }
 
@@ -136,6 +138,7 @@ inline void initgraph(int width, int height) {
  */
 inline void closegraph() {
     using namespace _easyx_impl;
+    g_windowOpen = false;
     if (g_window) {
         g_window->close();
         delete g_window;
@@ -155,7 +158,7 @@ inline void setbkcolor(COLORREF color) {
  */
 inline void cleardevice() {
     using namespace _easyx_impl;
-    if (g_window) {
+    if (g_window && g_windowOpen) {
         g_window->clear(g_bgColor);
     }
 }
@@ -186,7 +189,7 @@ inline void setlinestyle(int style, int thickness = 1) {
  */
 inline void fillrectangle(int left, int top, int right, int bottom) {
     using namespace _easyx_impl;
-    if (!g_window) return;
+    if (!g_window || !g_windowOpen) return;
 
     // 填充部分
     sf::RectangleShape fill({(float)(right - left), (float)(bottom - top)});
@@ -208,7 +211,7 @@ inline void fillrectangle(int left, int top, int right, int bottom) {
  */
 inline void rectangle(int left, int top, int right, int bottom) {
     using namespace _easyx_impl;
-    if (!g_window) return;
+    if (!g_window || !g_windowOpen) return;
 
     sf::RectangleShape rect({(float)(right - left), (float)(bottom - top)});
     rect.setPosition({(float)left, (float)top});
@@ -223,7 +226,7 @@ inline void rectangle(int left, int top, int right, int bottom) {
  */
 inline void line(int x1, int y1, int x2, int y2) {
     using namespace _easyx_impl;
-    if (!g_window) return;
+    if (!g_window || !g_windowOpen) return;
 
     // SFML没有原生line，用细矩形模拟
     float dx = (float)(x2 - x1);
@@ -264,7 +267,7 @@ inline void settextstyle(int height, int width, const char* face) {
  */
 inline void outtextxy(int x, int y, const char* str) {
     using namespace _easyx_impl;
-    if (!g_window || !g_fontLoaded) return;
+    if (!g_window || !g_windowOpen || !g_fontLoaded) return;
 
     sf::Text text(g_font, toSfString(str), g_textSize);
     text.setPosition({(float)x, (float)y});
@@ -308,15 +311,26 @@ inline void BeginBatchDraw() {
 
 inline void FlushBatchDraw() {
     using namespace _easyx_impl;
-    if (g_window) {
+    if (g_window && g_windowOpen) {
         g_window->display();
-        // 处理SFML事件（窗口关闭等）
-        while (const auto event = g_window->pollEvent()) {
-            if (event->is<sf::Event::Closed>()) {
-                g_window->close();
-            }
+    }
+}
+
+/**
+ * @brief 处理SFML窗口事件（关闭等）
+ * @return true窗口仍打开，false窗口已关闭
+ */
+inline bool processWindowEvents() {
+    using namespace _easyx_impl;
+    if (!g_window || !g_windowOpen) return false;
+    while (const auto event = g_window->pollEvent()) {
+        if (event->is<sf::Event::Closed>()) {
+            g_windowOpen = false;
+            g_window->close();
+            return false;
         }
     }
+    return true;
 }
 
 inline void EndBatchDraw() {
@@ -332,7 +346,7 @@ inline void EndBatchDraw() {
  */
 inline SHORT GetAsyncKeyState(int vKey) {
     using namespace _easyx_impl;
-    if (!g_window) return 0;
+    if (!g_window || !g_windowOpen) return 0;
 
     sf::Keyboard::Key key = sf::Keyboard::Key::Unknown;
 
