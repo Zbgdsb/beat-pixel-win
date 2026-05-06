@@ -8,6 +8,8 @@
 #include <ctime>
 #include <cstdio>
 #include <cmath>
+#include <cstdlib>
+#include <algorithm>
 
 // 静态常量定义
 const double GameWindow::NOTE_SPEED = 5.0; // 5px/帧 ≈ 300px/s @60FPS
@@ -43,56 +45,68 @@ void GameWindow::initTracks() {
 }
 
 /**
- * @brief 加载演示谱面
- * @details 生成预设音符时间点，同时记录到noteTimeData供BGM同步使用
+ * @brief 随机生成谱面
+ * @details 每次运行生成不同的随机音符序列
+ *          节奏从慢到快渐进，覆盖4条轨道，15%概率双押
+ *          音符时间数据同步传给AudioManager生成匹配BGM
  */
 void GameWindow::loadDemoSong() {
-    struct NoteData {
-        long long time;
-        int track;
-    };
-
-    NoteData demoNotes[] = {
-        // 开场慢速段 (间隔1000ms)
-        {2000, 0}, {3000, 1}, {4000, 2}, {5000, 3},
-        {6000, 0}, {7000, 1}, {8000, 2}, {9000, 3},
-        // 中速段 (间隔800ms)
-        {10000, 0}, {10800, 2}, {11600, 1}, {12400, 3},
-        {13200, 0}, {14000, 2}, {14800, 1}, {15600, 3},
-        // 双押段
-        {16500, 0}, {16500, 3}, {17500, 1}, {17500, 2},
-        {18500, 0}, {18500, 3}, {19500, 1}, {19500, 2},
-        // 快速段 (间隔500ms)
-        {20500, 0}, {21000, 1}, {21500, 2}, {22000, 3},
-        {22500, 0}, {23000, 1}, {23500, 2}, {24000, 3},
-        // 高潮段 (间隔400ms)
-        {25000, 0}, {25400, 1}, {25800, 2}, {26200, 3},
-        {26600, 3}, {27000, 2}, {27400, 1}, {27800, 0},
-        {28200, 0}, {28600, 2}, {29000, 1}, {29400, 3},
-        // 结尾段 (间隔600ms)
-        {30000, 0}, {30600, 1}, {31200, 2}, {31800, 3},
-        {32400, 1}, {33000, 2}, {33600, 0}, {34200, 3},
-    };
-
-    int noteCount = sizeof(demoNotes) / sizeof(demoNotes[0]);
-
-    // 记录音符时间数据（供BGM同步生成）
     noteTimeData.clear();
-    for (int i = 0; i < noteCount; i++) {
-        noteTimeData.push_back({demoNotes[i].time, demoNotes[i].track});
 
+    srand((unsigned int)time(nullptr));
+
+    long long currentTimeMs = 2000; // 从第2秒开始（留1秒准备时间）
+    long long endTime = 35000;      // 总时长约35秒
+    int lastTrack = -1;             // 上一次的轨道，避免连续同轨
+
+    while (currentTimeMs < endTime) {
+        // 随机选择轨道（避免连续两次同轨）
+        int track;
+        do {
+            track = rand() % 4;
+        } while (track == lastTrack);
+        lastTrack = track;
+
+        // 添加音符
+        noteTimeData.push_back({currentTimeMs, track});
         auto note = std::make_unique<NormalNote>(
-            demoNotes[i].track,
-            demoNotes[i].time,
-            JUDGE_Y,
-            NOTE_SPEED,
-            TRACK_COLORS[demoNotes[i].track]
+            track, currentTimeMs, JUDGE_Y, NOTE_SPEED, TRACK_COLORS[track]
         );
-        tracks[demoNotes[i].track]->addNote(std::move(note));
+        tracks[track]->addNote(std::move(note));
+
+        // 15%概率双押：同时在另一个轨道也放一个音符
+        if (rand() % 100 < 15) {
+            int track2;
+            do {
+                track2 = rand() % 4;
+            } while (track2 == track);
+            noteTimeData.push_back({currentTimeMs, track2});
+            auto note2 = std::make_unique<NormalNote>(
+                track2, currentTimeMs, JUDGE_Y, NOTE_SPEED, TRACK_COLORS[track2]
+            );
+            tracks[track2]->addNote(std::move(note2));
+        }
+
+        // 计算下一个音符间隔：从慢到快渐进
+        // 前10秒：600-1200ms（慢速段）
+        // 10-20秒：400-800ms（中速段）
+        // 20-30秒：300-600ms（快速段）
+        // 30秒后：400-700ms（结尾段）
+        int minGap, maxGap;
+        if (currentTimeMs < 10000) {
+            minGap = 600; maxGap = 1200;
+        } else if (currentTimeMs < 20000) {
+            minGap = 400; maxGap = 800;
+        } else if (currentTimeMs < 30000) {
+            minGap = 300; maxGap = 600;
+        } else {
+            minGap = 400; maxGap = 700;
+        }
+        int gap = minGap + rand() % (maxGap - minGap + 1);
+        currentTimeMs += gap;
     }
 
-    // 记录最后一个音符的时间（用于游戏结束判定）
-    lastNoteTime = demoNotes[noteCount - 1].time;
+    lastNoteTime = noteTimeData.back().first;
 }
 
 /**
