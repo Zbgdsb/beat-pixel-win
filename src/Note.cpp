@@ -13,8 +13,8 @@
  * @param speed     下落速度 px/帧
  */
 Note::Note(int track, long long judgeTime, int judgeY, double speed)
-    : track(track), judgeTime(judgeTime), judgeY(judgeY),
-      speed(speed), isJudged(false) {
+    : track(track), judgeY(judgeY), speed(speed),
+      isJudged(false), judgeTime(judgeTime) {
     // 初始Y坐标：根据判定时间差计算音符初始位置
     // 音符从屏幕上方开始，随时间推移向判定线移动
     y = judgeY - (int)(speed * 60.0 * 3.0); // 预留3秒的下落距离

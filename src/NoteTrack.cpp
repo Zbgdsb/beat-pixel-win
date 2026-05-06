@@ -80,7 +80,7 @@ void NoteTrack::draw() {
 
     // 5. 绘制按键提示文字（判定线下方）
     settextcolor(RGB(200, 200, 200));
-    settextstyle(20, 0, _T("Consolas"));
+    settextstyle(20, 0, "Consolas");
     char keyStr[2] = {key, '\0'};
     // 居中绘制按键字母
     int textW = textwidth(keyStr);

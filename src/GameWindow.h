@@ -5,7 +5,7 @@
  *          管理4条轨道、计分系统、谱面数据的完整游戏生命周期
  */
 #pragma once
-#include <graphics.h>
+#include "graphics.h"
 #include <vector>
 #include <memory>
 #include "NoteTrack.h"

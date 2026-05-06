@@ -5,7 +5,7 @@
  *          判定规则：Perfect(±50ms) / Good(±150ms) / Miss(>150ms)
  */
 #pragma once
-#include <graphics.h>
+#include "graphics.h"
 #include <cstdlib>
 
 // 判定结果枚举

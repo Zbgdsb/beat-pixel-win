@@ -213,16 +213,16 @@ void GameWindow::render() {
 void GameWindow::drawUI() {
     // ---- 分数显示（左上角） ----
     settextcolor(RGB(255, 255, 255));
-    settextstyle(24, 0, _T("Consolas"));
+    settextstyle(24, 0, "Consolas");
     char scoreStr[64];
-    sprintf(scoreStr, "SCORE: %d", scoreSystem.getTotalScore());
+    snprintf(scoreStr, sizeof(scoreStr), "SCORE: %d", scoreSystem.getTotalScore());
     outtextxy(20, 20, scoreStr);
 
     // ---- Combo显示（右上角） ----
     if (scoreSystem.getCurrentCombo() > 0) {
         // Combo数越大字体越大，增强视觉冲击
         int comboSize = 28 + std::min(scoreSystem.getCurrentCombo() / 10, 5) * 4;
-        settextstyle(comboSize, 0, _T("Consolas"));
+        settextstyle(comboSize, 0, "Consolas");
 
         // Combo数超过50变为金色，超过100变为红色
         COLORREF comboColor = RGB(255, 255, 255);
@@ -234,7 +234,7 @@ void GameWindow::drawUI() {
         settextcolor(comboColor);
 
         char comboStr[32];
-        sprintf(comboStr, "%d COMBO", scoreSystem.getCurrentCombo());
+        snprintf(comboStr, sizeof(comboStr), "%d COMBO", scoreSystem.getCurrentCombo());
         // 右对齐显示
         int comboW = textwidth(comboStr);
         outtextxy(width - comboW - 20, 20, comboStr);
@@ -266,7 +266,7 @@ void GameWindow::drawUI() {
         // 判定文字带缩放动画效果（从大到小）
         float scale = 1.0f + 0.3f * ((float)judgementDisplayTimer / 30.0f);
         int judgeSize = (int)(32 * scale);
-        settextstyle(judgeSize, 0, _T("Consolas"));
+        settextstyle(judgeSize, 0, "Consolas");
         settextcolor(judgeColor);
         int judgeW = textwidth(judgeStr);
         // 在判定线上方显示
@@ -275,18 +275,18 @@ void GameWindow::drawUI() {
 
     // ---- 操作提示（底部） ----
     settextcolor(RGB(100, 100, 100));
-    settextstyle(14, 0, _T("Consolas"));
-    outtextxy(20, height - 30, _T("ESC: Exit  |  Keys: A S D F"));
+    settextstyle(14, 0, "Consolas");
+    outtextxy(20, height - 30, "ESC: Exit  |  Keys: A S D F");
 
     // ---- 判定统计（左下角） ----
-    settextstyle(14, 0, _T("Consolas"));
+    settextstyle(14, 0, "Consolas");
     settextcolor(RGB(180, 180, 180));
     char statStr[128];
-    sprintf(statStr, "P:%d  G:%d  M:%d  MaxCombo:%d",
-            scoreSystem.getPerfectCount(),
-            scoreSystem.getGoodCount(),
-            scoreSystem.getMissCount(),
-            scoreSystem.getMaxCombo());
+    snprintf(statStr, sizeof(statStr), "P:%d  G:%d  M:%d  MaxCombo:%d",
+             scoreSystem.getPerfectCount(),
+             scoreSystem.getGoodCount(),
+             scoreSystem.getMissCount(),
+             scoreSystem.getMaxCombo());
     outtextxy(20, height - 55, statStr);
 }
 

@@ -1,0 +1,10 @@
+# Build artifacts
+build/
+BeatPixel
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
