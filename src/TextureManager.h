@@ -40,23 +40,23 @@ public:
         printf("[TextureManager] 尝试加载路径: %s\n", assetPath.c_str());
         fflush(stdout);
         // 音符
-        ok &= load(noteNormal,   assetPath + "/note_normal.jpg");
-        ok &= load(notePerfect,  assetPath + "/note_perfect.jpg");
-        ok &= load(noteGood,     assetPath + "/note_good.jpg");
-        ok &= load(noteMiss,     assetPath + "/note_miss.jpg");
+        ok &= load(noteNormal,   assetPath + "/note_normal.png");
+        ok &= load(notePerfect,  assetPath + "/note_perfect.png");
+        ok &= load(noteGood,     assetPath + "/note_good.png");
+        ok &= load(noteMiss,     assetPath + "/note_miss.png");
         // 按键 A S D F
         const char* keyNames[4] = {"A", "S", "D", "F"};
         for (int i = 0; i < 4; i++) {
-            ok &= load(keyNormal[i],  assetPath + "/key_" + keyNames[i] + "_normal.jpg");
-            ok &= load(keyPressed[i], assetPath + "/key_" + keyNames[i] + "_pressed.jpg");
+            ok &= load(keyNormal[i],  assetPath + "/key_" + keyNames[i] + "_normal.png");
+            ok &= load(keyPressed[i], assetPath + "/key_" + keyNames[i] + "_pressed.png");
         }
         // 判定文字
-        ok &= load(textPerfect, assetPath + "/text_perfect.jpg");
-        ok &= load(textGood,    assetPath + "/text_good.jpg");
-        ok &= load(textMiss,    assetPath + "/text_miss.jpg");
+        ok &= load(textPerfect, assetPath + "/text_perfect.png");
+        ok &= load(textGood,    assetPath + "/text_good.png");
+        ok &= load(textMiss,    assetPath + "/text_miss.png");
         // 场景
-        ok &= load(trackBg,    assetPath + "/track_background.jpg");
-        ok &= load(judgeLine,  assetPath + "/judge_line.jpg");
+        ok &= load(trackBg,    assetPath + "/track_background.png");
+        ok &= load(judgeLine,  assetPath + "/judge_line.png");
 
         if (ok) printf("[TextureManager] 全部 %d 张纹理加载成功\n", 19);
         return ok;
