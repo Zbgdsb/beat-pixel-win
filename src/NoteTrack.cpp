@@ -119,6 +119,27 @@ void NoteTrack::draw(const TextureManager& tex, int glowAlpha) {
     judgeZone.setFillColor(sf::Color(255, 255, 255, 15));
     g_window->draw(judgeZone);
 
+    // 5. 判定线闪光效果（打击时触发，逐帧衰减）
+    if (judgeLineFlash > 0.01f) {
+        // 闪光强度衰减
+        judgeLineFlash *= 0.85f;  // 每帧衰减15%，约10帧(160ms)降到可忽略
+        if (judgeLineFlash < 0.01f) judgeLineFlash = 0.0f;
+
+        // 绘制闪光层：判定线位置白色高亮
+        uint8_t flashAlpha = (uint8_t)(180 * judgeLineFlash);
+        sf::RectangleShape flashRect({(float)width, 8.0f});
+        flashRect.setPosition({(float)x, (float)judgeY - 4.0f});
+        flashRect.setFillColor(sf::Color(255, 255, 255, flashAlpha));
+        g_window->draw(flashRect);
+
+        // 上方扩散光晕
+        uint8_t glowAlpha = (uint8_t)(60 * judgeLineFlash);
+        sf::RectangleShape glowRect({(float)width, 40.0f});
+        glowRect.setPosition({(float)x, (float)judgeY - 40.0f});
+        glowRect.setFillColor(sf::Color(255, 255, 255, glowAlpha));
+        g_window->draw(glowRect);
+    }
+
     // 4. 绘制该轨道的所有音符
     for (auto& note : notes) {
         note->draw(x, tex.noteNormal);
@@ -185,6 +206,10 @@ NoteTrack::JudgeResult NoteTrack::handlePress(long long pressTime) {
         result.noteY = (float)closestNote->getY();
         result.color = closestNote->getColor();
         result.judgement = closestNote->judge(pressTime);
+        // 打击成功时触发判定线闪光
+        if (result.judgement == PERFECT || result.judgement == GOOD) {
+            judgeLineFlash = 1.0f;
+        }
         return result;
     }
 

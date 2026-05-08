@@ -31,6 +31,7 @@ private:
     [[maybe_unused]] double noteSpeed;   // 音符下落速度（传递给Note）
     std::vector<std::unique_ptr<Note>> notes; // 该轨道的音符列表
     [[maybe_unused]] char key;           // 对应按键 A/S/D/F（纹理通过trackId索引）
+    float judgeLineFlash = 0.0f;  // 判定线闪光强度（0-1），打击时触发，逐帧衰减
 
 public:
     NoteTrack(int trackId, int x, int width, int judgeY, double noteSpeed, char key);
