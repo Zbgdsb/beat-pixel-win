@@ -121,6 +121,7 @@ private:
     void drawUI();
     void drawResultScreen();
     void drawMenuScreen();
+    void drawDynamicBackground();  // 动态背景
     void drawAnimations();
     int getTrackX(int trackId) const;
     bool isGameFinished() const;

@@ -98,15 +98,69 @@ void GameWindow::drawMenuScreen() {
     outtextxy(width - 100, height - 20, "V2.0");
 }
 
+// ========== 动态背景绘制 ==========
+void GameWindow::drawDynamicBackground() {
+    using namespace _easyx_impl;
+    if (!g_window || !g_windowOpen) return;
+
+    int combo = scoreSystem.getCurrentCombo();
+
+    // 背景色随Combo变化：深蓝 → 紫 → 红
+    int baseR = 12, baseG = 12, baseB = 28;
+    if (combo >= 100) {
+        // 炽热红
+        baseR = 40 + (combo / 10 % 10);  // 微弱脉冲
+        baseG = 8;
+        baseB = 20;
+    } else if (combo >= 50) {
+        // 紫色
+        float t = (combo - 50) / 50.0f;
+        baseR = (int)(20 + 20 * t);
+        baseG = 10;
+        baseB = (int)(35 - 15 * t);
+    } else if (combo >= 10) {
+        // 深蓝偏紫
+        float t = (combo - 10) / 40.0f;
+        baseR = (int)(12 + 8 * t);
+        baseG = 12;
+        baseB = (int)(28 + 7 * t);
+    }
+
+    // 从上到下渐变
+    int topR = baseR + 5, topG = baseG + 3, topB = baseB + 10;
+    int botR = baseR - 5, botG = baseG - 3, botB = baseB - 5;
+    if (botR < 0) botR = 0;
+    if (botG < 0) botG = 0;
+    if (botB < 0) botB = 0;
+
+    // 绘制渐变背景（分16条带）
+    const int bands = 16;
+    for (int i = 0; i < bands; i++) {
+        float t = (float)i / bands;
+        int r = (int)(topR + (botR - topR) * t);
+        int g = (int)(topG + (botG - topG) * t);
+        int b = (int)(topB + (botB - topB) * t);
+        int y1 = (int)(height * t);
+        int y2 = (int)(height * (t + 1.0f / bands));
+
+        sf::RectangleShape band({(float)width, (float)(y2 - y1)});
+        band.setPosition({0.0f, (float)y1});
+        band.setFillColor(sf::Color(r, g, b));
+        g_window->draw(band);
+    }
+}
+
 // ========== 渲染调度 ==========
 
 void GameWindow::render() {
     BeginBatchDraw();
-    cleardevice();
 
     if (gameState == MENU) {
+        cleardevice();
         drawMenuScreen();
     } else if (gameState == PLAYING) {
+        // 动态背景替代纯黑背景
+        drawDynamicBackground();
         for (int i = 0; i < TRACK_COUNT; i++) {
             tracks[i]->draw(textures, keyGlowAlpha[i]);
         }
@@ -116,6 +170,7 @@ void GameWindow::render() {
         drawAnimations();
         drawUI();
     } else if (gameState == RESULT) {
+        cleardevice();
         drawResultScreen();
     }
 
