@@ -146,16 +146,7 @@ void NoteTrack::drawKeyButton(const TextureManager& tex, bool isPressed) {
     float cx = x + width / 2.0f;
     float cy = judgeY + 50.0f + SIZE / 2.0f;
 
-    // 后备：按键颜色矩形
-    sf::Color bgColor = isPressed ? sf::Color(200, 220, 255, 200) : sf::Color(80, 80, 100, 180);
-    sf::RectangleShape fallback({SIZE, SIZE});
-    fallback.setPosition({cx - SIZE/2, cy - SIZE/2});
-    fallback.setFillColor(bgColor);
-    fallback.setOutlineColor(sf::Color(200, 200, 220, 180));
-    fallback.setOutlineThickness(2.0f);
-    g_window->draw(fallback);
-
-    // 纹理叠加
+    // 直接绘制按键精灵，无底板矩形，透明背景
     sf::Sprite keySprite(keyTex);
     keySprite.setOrigin({SRC_W / 2.0f, SRC_H / 2.0f});
     keySprite.setScale({scale, scale});

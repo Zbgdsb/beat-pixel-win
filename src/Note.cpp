@@ -59,11 +59,7 @@ void NormalNote::draw(int trackX, const sf::Texture& noteNormalTex) {
         if (fade <= 0) return; // 已完全透明
         uint8_t alpha = (uint8_t)(220 * fade);
 
-        sf::RectangleShape rect({W, H});
-        rect.setPosition({cx - W/2, cy - H/2});
-        rect.setFillColor(sf::Color(255, 255, 255, alpha));
-        g_window->draw(rect);
-
+        // 直接绘制半透明精灵，无底板
         sf::Sprite sprite(noteNormalTex);
         sprite.setOrigin({TEX_W / 2.0f, TEX_H / 2.0f});
         sprite.setScale({W / TEX_W, H / TEX_H});
@@ -73,14 +69,7 @@ void NormalNote::draw(int trackX, const sf::Texture& noteNormalTex) {
         return;
     }
 
-    // 未判定：全彩绘制
-    // 白色实心底板（确保可见）
-    sf::RectangleShape rect({W, H});
-    rect.setPosition({cx - W/2, cy - H/2});
-    rect.setFillColor(sf::Color(255, 255, 255, 255));
-    g_window->draw(rect);
-
-    // 纹理叠加
+    // 未判定：直接绘制精灵，透明背景
     sf::Sprite sprite(noteNormalTex);
     sprite.setOrigin({TEX_W / 2.0f, TEX_H / 2.0f});
     sprite.setScale({W / TEX_W, H / TEX_H});
