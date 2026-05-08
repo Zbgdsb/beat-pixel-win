@@ -3,9 +3,11 @@
  * @brief 音符基类与派生类定义
  * @details 定义音符通用属性和方法，派生类实现具体绘制逻辑
  *          判定规则：Perfect(±50ms) / Good(±150ms) / Miss(>150ms)
+ *          v2.0: 使用像素素材纹理替代矩形绘制
  */
 #pragma once
 #include "graphics.h"
+#include <SFML/Graphics.hpp>
 #include <cstdlib>
 
 // 判定结果枚举
@@ -23,7 +25,8 @@ protected:
     int judgeY;         // 判定线Y坐标
     double speed;       // 下落速度 px/帧
     bool isJudged;      // 是否已完成判定
-    long long judgeTime;// 应该被判定的时间戳(ms)
+    long long judgeTime;// 应该被判定的时间戳(ms)（判定后变为实际按压时间）
+    int judgedFrames;   // 判定后经过的帧数（用于渐隐）
 
 public:
     Note(int track, long long judgeTime, int judgeY, double speed);
@@ -37,10 +40,11 @@ public:
     virtual bool update(long long currentTime);
 
     /**
-     * @brief 绘制音符（纯虚函数，由派生类实现）
+     * @brief 绘制音符（使用纹理渲染）
      * @param trackX 所属轨道的左上角X坐标
+     * @param noteNormalTex 普通音符纹理引用
      */
-    virtual void draw(int trackX) = 0;
+    virtual void draw(int trackX, const sf::Texture& noteNormalTex) = 0;
 
     /**
      * @brief 执行判定
@@ -49,8 +53,15 @@ public:
      */
     virtual Judgement judge(long long pressTime);
 
+    /**
+     * @brief 获取音符对应的判定纹理
+     * @details 基类默认返回普通纹理，判定后由GameWindow根据判定等级选择
+     * @return 音符颜色（用于兼容旧接口）
+     */
+    virtual COLORREF getColor() const { return RGB(255, 255, 255); }
+
     // 音符状态查询
-    bool isPastJudgeLine() const { return y > judgeY + 30; }
+    bool isPastJudgeLine() const { return y > judgeY + 150; } // 穿过判定线150px后才算Miss，给玩家充足时间
     bool isOffScreen() const { return y > judgeY + 300; }
     void markJudged() { isJudged = true; }
 
@@ -63,7 +74,7 @@ public:
 
 /**
  * @brief 普通音符派生类
- * @details 实现基础的矩形像素风格音符绘制
+ * @details 实现纹理化音符绘制，不同轨道不同颜色便于区分
  */
 class NormalNote : public Note {
 private:
@@ -71,5 +82,6 @@ private:
 
 public:
     NormalNote(int track, long long judgeTime, int judgeY, double speed, COLORREF color);
-    void draw(int trackX) override;
+    void draw(int trackX, const sf::Texture& noteNormalTex) override;
+    COLORREF getColor() const override { return color; }
 };

@@ -1,7 +1,8 @@
 /**
  * @file NoteTrack.cpp
  * @brief NoteTrack类实现 - 单个轨道管理
- * @details 负责轨道绘制、音符列表管理、按键判定触发逻辑
+ * @details v2.0: 使用像素素材纹理渲染轨道背景、判定线、按键按钮和音符
+ *          支持按键按下状态切换和轨道发光效果
  */
 #include "NoteTrack.h"
 #include <algorithm>
@@ -33,16 +34,26 @@ void NoteTrack::addNote(std::unique_ptr<Note> note) {
  * @details 1. 更新每个音符位置
  *          2. 检测超出屏幕的未判定音符，标记为MISS并计入计分
  *          3. 移除已判定且超出屏幕的音符，释放内存
+ *          4. 收集自动Miss音符信息用于播放动画
  * @param currentTime 当前时间戳(ms)
  * @param scoreSystem 计分系统引用，用于记录MISS判定
+ * @return 自动Miss的音符信息列表
  */
-void NoteTrack::update(long long currentTime, ScoreSystem& scoreSystem) {
-    // 从后往前遍历，安全删除
+std::vector<AutoMissInfo> NoteTrack::update(long long currentTime, ScoreSystem& scoreSystem) {
+    std::vector<AutoMissInfo> autoMisses;
+
+    // 调试
     for (int i = (int)notes.size() - 1; i >= 0; i--) {
         notes[i]->update(currentTime);
 
-        // 检测：音符已过判定线且未被判定 -> 自动MISS
         if (!notes[i]->getIsJudged() && notes[i]->isPastJudgeLine()) {
+            // 记录自动Miss信息（用于播放Miss动画）
+            AutoMissInfo info;
+            info.trackId = trackId;
+            info.y = (float)notes[i]->getY();
+            info.color = notes[i]->getColor();
+            autoMisses.push_back(info);
+
             scoreSystem.addJudgement(MISS);
             notes[i]->markJudged(); // 标记为已判定，避免重复计分
         }
@@ -52,73 +63,124 @@ void NoteTrack::update(long long currentTime, ScoreSystem& scoreSystem) {
             notes.erase(notes.begin() + i);
         }
     }
+    return autoMisses;
 }
 
 /**
- * @brief 绘制轨道背景和判定线
- * @details 绘制半透明轨道底色 + 判定线 + 按键提示文字
+ * @brief 绘制轨道（纹理版本）
+ * @details 绘制顺序：轨道背景纹理 → 轨道发光叠加 → 判定线纹理 → 音符
+ * @param tex 纹理管理器引用
+ * @param glowAlpha 轨道发光透明度（0-255）
  */
-void NoteTrack::draw() {
-    // 1. 绘制轨道背景（深灰色半透明效果）
-    setfillcolor(RGB(30, 30, 30));
-    fillrectangle(x, 0, x + width, getheight());
+void NoteTrack::draw(const TextureManager& tex, int glowAlpha) {
+    using namespace _easyx_impl;
+    if (!g_window || !g_windowOpen) return;
 
-    // 2. 绘制轨道分隔线（左右边界）
-    setlinecolor(RGB(80, 80, 80));
-    line(x, 0, x, getheight());
-    line(x + width, 0, x + width, getheight());
+    // 1. 先画深色底色，再叠加纹理背景
+    sf::RectangleShape darkBg({(float)width, (float)getheight()});
+    darkBg.setPosition({(float)x, 0.0f});
+    darkBg.setFillColor(sf::Color(25, 25, 35, 255));
+    g_window->draw(darkBg);
 
-    // 3. 绘制判定线（亮白色横线）
-    setlinecolor(RGB(255, 255, 255));
-    setlinestyle(PS_SOLID, 3);
-    line(x + 5, judgeY, x + width - 5, judgeY);
-    setlinestyle(PS_SOLID, 1); // 恢复默认线型
+    // 叠加纹理背景
+    sf::Sprite bgSprite(tex.trackBg);
+    sf::Vector2u bgSize = tex.trackBg.getSize();
+    float bgScaleX = (float)width / bgSize.x;
+    float bgScaleY = (float)getheight() / bgSize.y;
+    bgSprite.setScale({bgScaleX, bgScaleY});
+    bgSprite.setPosition({(float)x, 0.0f});
+    g_window->draw(bgSprite);
 
-    // 4. 绘制判定区域提示（判定线上下方的半透明区域）
-    setfillcolor(RGB(50, 50, 50));
-    fillrectangle(x + 2, judgeY - 30, x + width - 2, judgeY + 30);
+    // 2. 轨道发光效果（按键按下时叠加半透明白色发光层）
+    if (glowAlpha > 0) {
+        sf::RectangleShape glow({(float)width, (float)getheight()});
+        glow.setPosition({(float)x, 0.0f});
+        glow.setFillColor(sf::Color(255, 255, 255, (uint8_t)(glowAlpha * 0.15f)));
+        g_window->draw(glow);
+    }
 
-    // 5. 绘制按键提示文字（判定线下方）
-    settextcolor(RGB(200, 200, 200));
-    settextstyle(20, 0, "Consolas");
-    char keyStr[2] = {key, '\0'};
-    // 居中绘制按键字母
-    int textW = textwidth(keyStr);
-    outtextxy(x + (width - textW) / 2, judgeY + 40, keyStr);
+    // 3. 绘制判定线（纹理+后备实线双保险）
+    // 先画一条白色实线作为后备
+    sf::RectangleShape judgeLine({(float)width, 4.0f});
+    judgeLine.setPosition({(float)x, (float)judgeY - 2.0f});
+    judgeLine.setFillColor(sf::Color(255, 255, 255, 230));
+    g_window->draw(judgeLine);
+    // 叠加纹理
+    sf::Sprite judgeSprite(tex.judgeLine);
+    sf::Vector2u jlSize = tex.judgeLine.getSize();
+    float jlScaleX = (float)width / jlSize.x;
+    float jlScaleY = 32.0f / jlSize.y;
+    judgeSprite.setScale({jlScaleX, jlScaleY});
+    judgeSprite.setPosition({(float)x, (float)judgeY - 16.0f});
+    g_window->draw(judgeSprite);
+    // 判定区域高亮
+    sf::RectangleShape judgeZone({(float)width, 60.0f});
+    judgeZone.setPosition({(float)x, (float)judgeY - 30.0f});
+    judgeZone.setFillColor(sf::Color(255, 255, 255, 15));
+    g_window->draw(judgeZone);
 
-    // 6. 绘制该轨道的所有音符
+    // 4. 绘制该轨道的所有音符
     for (auto& note : notes) {
-        note->draw(x); // 传入轨道X坐标，音符在轨道内绘制
+        note->draw(x, tex.noteNormal);
     }
 }
 
 /**
- * @brief 处理该轨道的按键按下事件
+ * @brief 绘制按键按钮
+ * @details 在轨道判定线下方显示按键素材，按下时切换到pressed纹理
+ *          按键尺寸80x80，在100px宽的轨道内居中显示
+ * @param tex 纹理管理器引用
+ * @param isPressed 按键是否按下
+ */
+void NoteTrack::drawKeyButton(const TextureManager& tex, bool isPressed) {
+    using namespace _easyx_impl;
+    if (!g_window || !g_windowOpen) return;
+
+    const float SIZE = 80.0f;
+    const float SRC = 256.0f;
+    float scale = SIZE / SRC;
+    float cx = x + width / 2.0f;
+    float cy = judgeY + 50.0f + SIZE / 2.0f;
+
+    // 后备：按键颜色矩形
+    sf::Color bgColor = isPressed ? sf::Color(200, 220, 255, 200) : sf::Color(80, 80, 100, 180);
+    sf::RectangleShape fallback({SIZE, SIZE});
+    fallback.setPosition({cx - SIZE/2, cy - SIZE/2});
+    fallback.setFillColor(bgColor);
+    fallback.setOutlineColor(sf::Color(200, 200, 220, 180));
+    fallback.setOutlineThickness(2.0f);
+    g_window->draw(fallback);
+
+    // 纹理叠加
+    const sf::Texture& keyTex = isPressed ? tex.keyPressed[trackId] : tex.keyNormal[trackId];
+    sf::Sprite keySprite(keyTex);
+    keySprite.setOrigin({SRC / 2.0f, SRC / 2.0f});
+    keySprite.setScale({scale, scale});
+    keySprite.setPosition({cx, cy});
+    g_window->draw(keySprite);
+}
+
+/**
+ * @brief 处理该轨道按键按下事件
  * @details 三层判定逻辑：
- *          1. ±150ms内有音符 -> 正常判定(Perfect/Good/Miss)
- *          2. ±300ms内有音符但不在判定窗口 -> 按早了/按晚了，扣分(MISS)
- *          3. 300ms内无音符 -> 乱按，扣分(MISS)
+ *          1. ±300ms内有音符 -> 正常判定(Perfect/Good/Miss)
+ *          2. ±500ms内有音符但不在判定窗口 -> 按早了/按晚了，扣分(MISS)
+ *          3. 500ms内无音符 -> 乱按，扣分(MISS)
  *          防止玩家无脑同时按住所有键刷分
  * @param pressTime 按键按下的时间戳(ms)
  * @return 判定结果
  */
-Judgement NoteTrack::handlePress(long long pressTime) {
+NoteTrack::JudgeResult NoteTrack::handlePress(long long pressTime) {
+    JudgeResult result;
     Note* closestNote = nullptr;
     long long minDiff = LLONG_MAX;
-    bool hasNearbyNote = false; // 300ms内是否有未判定音符
+    bool hasNearbyNote = false;
 
     for (auto& note : notes) {
         if (note->getIsJudged()) continue;
-
         long long diff = std::abs(pressTime - note->getJudgeTime());
-
-        // 300ms内有音符（不管是否在判定窗口）
-        if (diff <= 300) {
-            hasNearbyNote = true;
-        }
-
-        // 150ms判定窗口内 -> 正常判定
-        if (diff <= 150 && diff < minDiff) {
+        if (diff <= 500) hasNearbyNote = true;
+        if (diff <= 300 && diff < minDiff) {
             minDiff = diff;
             closestNote = note.get();
         }
@@ -126,26 +188,32 @@ Judgement NoteTrack::handlePress(long long pressTime) {
 
     // 情况1：判定窗口内有音符，正常判定
     if (closestNote) {
-        return closestNote->judge(pressTime);
+        result.noteY = (float)closestNote->getY();
+        result.color = closestNote->getColor();
+        result.judgement = closestNote->judge(pressTime);
+        return result;
     }
 
-    // 情况2：300ms内有音符但不在判定窗口 -> 按早了/按晚了，标记该音符为MISS
+    // 情况2：500ms内有音符但不在判定窗口 -> MISS
     if (hasNearbyNote) {
-        // 找到最近的未判定音符，标记为已判定（避免过线后重复计MISS）
         Note* nearest = nullptr;
         long long nearestDiff = LLONG_MAX;
         for (auto& note : notes) {
             if (note->getIsJudged()) continue;
             long long diff = std::abs(pressTime - note->getJudgeTime());
-            if (diff < nearestDiff) {
-                nearestDiff = diff;
-                nearest = note.get();
-            }
+            if (diff < nearestDiff) { nearestDiff = diff; nearest = note.get(); }
         }
-        if (nearest) nearest->markJudged();
-        return MISS;
+        if (nearest) {
+            result.noteY = (float)nearest->getY();
+            result.color = nearest->getColor();
+            nearest->markJudged();
+        }
+        result.judgement = MISS;
+        return result;
     }
 
-    // 情况3：300ms内无音符 -> 乱按，直接扣分
-    return MISS;
+    // 情况3：500ms内无音符 -> 乱按
+    result.noteY = (float)judgeY; // 使用判定线位置作为后备
+    result.judgement = MISS;
+    return result;
 }
