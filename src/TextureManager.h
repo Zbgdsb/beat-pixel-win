@@ -29,6 +29,7 @@ public:
     // ========== 场景纹理 ==========
     sf::Texture trackBg;       // 轨道背景 (track_background.png)
     sf::Texture judgeLine;     // 判定线 (judge_line.png)
+    sf::Texture gameBg;        // 游戏全局背景 (game_bg.png)
 
     /**
      * @brief 加载所有纹理资源
@@ -57,6 +58,7 @@ public:
         // 场景
         ok &= load(trackBg,    assetPath + "/track_background.png");
         ok &= load(judgeLine,  assetPath + "/judge_line.png");
+        ok &= load(gameBg,     assetPath + "/game_bg.png");
 
         if (ok) printf("[TextureManager] 全部 %d 张纹理加载成功\n", 19);
         return ok;

@@ -183,6 +183,21 @@ void GameWindow::render() {
         cleardevice();
         drawMenuScreen();
     } else if (gameState == PLAYING) {
+        // 游戏背景图（cover模式，不变形铺满）
+        {
+            using namespace _easyx_impl;
+            sf::Sprite bgSprite(textures.gameBg);
+            sf::Vector2u texSize = textures.gameBg.getSize();
+            float scaleX = (float)width / texSize.x;
+            float scaleY = (float)height / texSize.y;
+            float scale = std::max(scaleX, scaleY);  // cover模式
+            bgSprite.setScale({scale, scale});
+            // 居中裁剪
+            float offsetX = (width - texSize.x * scale) / 2.0f;
+            float offsetY = (height - texSize.y * scale) / 2.0f;
+            bgSprite.setPosition({offsetX, offsetY});
+            g_window->draw(bgSprite);
+        }
         // 动态背景替代纯黑背景
         drawDynamicBackground();
         for (int i = 0; i < TRACK_COUNT; i++) {
