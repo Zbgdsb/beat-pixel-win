@@ -46,8 +46,9 @@ void NormalNote::draw(int trackX, const sf::Texture& noteNormalTex) {
     using namespace _easyx_impl;
     if (!g_window || !g_windowOpen) return;
 
-    const float W = 80.0f, H = 80.0f;
-    const float TEX = 512.0f;
+    const float W = 80.0f, H = 64.0f;  // 音符显示尺寸，匹配素材原始比例(约80x64)
+    const float TEX_W = (float)noteNormalTex.getSize().x;  // 使用实际纹理宽度
+    const float TEX_H = (float)noteNormalTex.getSize().y;  // 使用实际纹理高度
     float cx = trackX + 50.0f;
     float cy = (float)y;
 
@@ -64,8 +65,8 @@ void NormalNote::draw(int trackX, const sf::Texture& noteNormalTex) {
         g_window->draw(rect);
 
         sf::Sprite sprite(noteNormalTex);
-        sprite.setOrigin({TEX / 2.0f, TEX / 2.0f});
-        sprite.setScale({W / TEX, H / TEX});
+        sprite.setOrigin({TEX_W / 2.0f, TEX_H / 2.0f});
+        sprite.setScale({W / TEX_W, H / TEX_H});
         sprite.setPosition({cx, cy});
         sprite.setColor(sf::Color(255, 255, 255, alpha));
         g_window->draw(sprite);
@@ -81,8 +82,8 @@ void NormalNote::draw(int trackX, const sf::Texture& noteNormalTex) {
 
     // 纹理叠加
     sf::Sprite sprite(noteNormalTex);
-    sprite.setOrigin({TEX / 2.0f, TEX / 2.0f});
-    sprite.setScale({W / TEX, H / TEX});
+    sprite.setOrigin({TEX_W / 2.0f, TEX_H / 2.0f});
+    sprite.setScale({W / TEX_W, H / TEX_H});
     sprite.setPosition({cx, cy});
     g_window->draw(sprite);
 }

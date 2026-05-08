@@ -128,10 +128,7 @@ void GameWindow::drawAnimations() {
     using namespace _easyx_impl;
     if (!g_window || !g_windowOpen) return;
 
-    const float NOTE_TEX_SIZE = 512.0f;
-    const float NOTE_DISPLAY = 80.0f;
-
-    // 打击动画
+    // 绘制打击动画：音符放大消失
     for (auto& anim : hitAnims) {
         float t = anim.elapsed / anim.duration;
         if (t > 1.0f) t = 1.0f;
@@ -140,12 +137,15 @@ void GameWindow::drawAnimations() {
         float scale = 1.0f + 0.5f * easedT;
         uint8_t alpha = (uint8_t)(255 * (1.0f - t));
 
-        float baseScaleX = NOTE_DISPLAY / NOTE_TEX_SIZE;
-        float baseScaleY = NOTE_DISPLAY / NOTE_TEX_SIZE;
+        // 使用实际纹理尺寸，保持原始比例
+        float texW = (float)anim.texture->getSize().x;
+        float texH = (float)anim.texture->getSize().y;
+        float displayW = 80.0f;  // 音符显示宽度
+        float displayH = displayW * texH / texW;  // 按比例计算高度
 
         sf::Sprite sprite(*anim.texture);
-        sprite.setOrigin({NOTE_TEX_SIZE / 2.0f, NOTE_TEX_SIZE / 2.0f});
-        sprite.setScale({baseScaleX * scale, baseScaleY * scale});
+        sprite.setOrigin({texW / 2.0f, texH / 2.0f});
+        sprite.setScale({displayW / texW * scale, displayH / texH * scale});
         sprite.setPosition({anim.x, anim.y});
         sprite.setColor(sf::Color(255, 255, 255, alpha));
         g_window->draw(sprite);
@@ -160,8 +160,11 @@ void GameWindow::drawAnimations() {
         float scale = 1.0f + 0.2f * easedT;
         uint8_t alpha = (uint8_t)(255 * (1.0f - t));
 
-        float w = 180.0f * scale;
-        float h = 45.0f * scale;
+        // 使用实际纹理尺寸，保持原始比例
+        float texW = (float)anim.texture->getSize().x;
+        float texH = (float)anim.texture->getSize().y;
+        float displayW = 180.0f * scale;  // 文字显示宽度
+        float displayH = displayW * texH / texW;  // 按比例计算高度
 
         sf::Color bgColor;
         if (anim.texture == &textures.textPerfect)
@@ -171,17 +174,16 @@ void GameWindow::drawAnimations() {
         else
             bgColor = sf::Color(255, 60, 60);
 
-        sf::RectangleShape bg({w + 12, h + 8});
-        bg.setPosition({anim.x - w/2 - 6, anim.y - h/2 - 4});
+        sf::RectangleShape bg({displayW + 12, displayH + 8});
+        bg.setPosition({anim.x - displayW/2 - 6, anim.y - displayH/2 - 4});
         bg.setFillColor(sf::Color(bgColor.r, bgColor.g, bgColor.b, (uint8_t)(alpha * 0.85f)));
         bg.setOutlineColor(sf::Color(255, 255, 255, alpha));
         bg.setOutlineThickness(3.0f);
         g_window->draw(bg);
 
-        const float TEX_W = 512.0f, TEX_H = 128.0f;
         sf::Sprite sprite(*anim.texture);
-        sprite.setOrigin({TEX_W / 2.0f, TEX_H / 2.0f});
-        sprite.setScale({w / TEX_W, h / TEX_H});
+        sprite.setOrigin({texW / 2.0f, texH / 2.0f});
+        sprite.setScale({displayW / texW, displayH / texH});
         sprite.setPosition({anim.x, anim.y});
         sprite.setColor(sf::Color(255, 255, 255, alpha));
         g_window->draw(sprite);

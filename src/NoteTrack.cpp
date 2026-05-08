@@ -136,9 +136,13 @@ void NoteTrack::drawKeyButton(const TextureManager& tex, bool isPressed) {
     using namespace _easyx_impl;
     if (!g_window || !g_windowOpen) return;
 
+    // 先获取纹理引用
+    const sf::Texture& keyTex = isPressed ? tex.keyPressed[trackId] : tex.keyNormal[trackId];
+
     const float SIZE = 80.0f;
-    const float SRC = 256.0f;
-    float scale = SIZE / SRC;
+    const float SRC_W = (float)keyTex.getSize().x;  // 使用实际纹理宽度
+    const float SRC_H = (float)keyTex.getSize().y;  // 使用实际纹理高度
+    float scale = SIZE / SRC_W;  // 按宽度缩放，保持原始比例
     float cx = x + width / 2.0f;
     float cy = judgeY + 50.0f + SIZE / 2.0f;
 
@@ -152,9 +156,8 @@ void NoteTrack::drawKeyButton(const TextureManager& tex, bool isPressed) {
     g_window->draw(fallback);
 
     // 纹理叠加
-    const sf::Texture& keyTex = isPressed ? tex.keyPressed[trackId] : tex.keyNormal[trackId];
     sf::Sprite keySprite(keyTex);
-    keySprite.setOrigin({SRC / 2.0f, SRC / 2.0f});
+    keySprite.setOrigin({SRC_W / 2.0f, SRC_H / 2.0f});
     keySprite.setScale({scale, scale});
     keySprite.setPosition({cx, cy});
     g_window->draw(keySprite);
