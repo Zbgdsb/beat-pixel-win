@@ -12,23 +12,49 @@
 // ========== 主菜单渲染（V2.0新增） ==========
 
 void GameWindow::drawMenuScreen() {
-    // 背景
-    setfillcolor(RGB(15, 15, 25));
-    fillrectangle(0, 0, width, height);
+    using namespace _easyx_impl;
+    if (!g_window || !g_windowOpen) return;
 
-    // 标题
-    settextcolor(RGB(0, 255, 255));
+    // 渐变背景（从深蓝到深紫）
+    const int bands = 16;
+    for (int i = 0; i < bands; i++) {
+        float t = (float)i / bands;
+        int r = (int)(8 + 12 * t);
+        int g = (int)(8 + 4 * t);
+        int b = (int)(20 + 15 * t);
+        int y1 = (int)(height * t);
+        int y2 = (int)(height * (t + 1.0f / bands));
+        sf::RectangleShape band({(float)width, (float)(y2 - y1)});
+        band.setPosition({0.0f, (float)y1});
+        band.setFillColor(sf::Color(r, g, b));
+        g_window->draw(band);
+    }
+
+    // 标题呼吸灯效果
+    float breathe = 0.7f + 0.3f * std::sin((float)GetTickCount64() / 800.0f);
+    int titleR = (int)(0 * 255 * breathe);
+    int titleG = (int)(1.0f * 255 * breathe);
+    int titleB = (int)(1.0f * 255 * breathe);
+
+    settextcolor(RGB(titleR, titleG, titleB));
     settextstyle(48, 0, "Consolas");
     const char* title = "BEAT PIXEL";
     int titleW = textwidth(title);
     outtextxy((width - titleW) / 2, 60, title);
 
+    // 标题下方装饰线
+    int lineW = titleW + 40;
+    sf::RectangleShape decorLine({(float)lineW, 2.0f});
+    decorLine.setPosition({(float)((width - lineW) / 2), 115.0f});
+    decorLine.setFillColor(sf::Color(0, 200, 200, (uint8_t)(120 * breathe)));
+    g_window->draw(decorLine);
+
     // 副标题
-    settextcolor(RGB(150, 150, 180));
-    settextstyle(18, 0, "Consolas");
+    settextcolor(RGB(140, 140, 170));
+    settextstyle(16, 0, "Consolas");
     const char* subtitle = "4-Key Rhythm Game";
     int subW = textwidth(subtitle);
-    outtextxy((width - subW) / 2, 120, subtitle);
+    outtextxy((width - subW) / 2, 125, subtitle);
 
     // 菜单选项
     const char* menuItems[] = {
@@ -37,65 +63,63 @@ void GameWindow::drawMenuScreen() {
         "Difficulty: Normal",
         "Exit"
     };
-
-    // 更新难度显示文字
     char diffStr[64];
     snprintf(diffStr, sizeof(diffStr), "Difficulty: %s", getDifficultyName());
     menuItems[2] = diffStr;
 
-    int menuY = 200;
-    int itemH = 50;
+    int menuY = 190;
+    int itemH = 55;
 
     for (int i = 0; i < 4; i++) {
         int y = menuY + i * itemH;
 
-        // 选中项高亮
         if (i == menuSelection) {
-            // 高亮背景
-            setfillcolor(RGB(40, 40, 60));
-            fillrectangle(150, y - 5, width - 150, y + 35);
+            // 选中项：渐变高亮底板
+            sf::RectangleShape highlight({300.0f, 40.0f});
+            highlight.setPosition({(float)((width - 300) / 2), (float)(y - 5)});
+            highlight.setFillColor(sf::Color(0, 180, 180, 40));
+            highlight.setOutlineColor(sf::Color(0, 220, 220, 120));
+            highlight.setOutlineThickness(1.0f);
+            g_window->draw(highlight);
 
-            // 左侧指示器
+            // 左侧指示三角
             settextcolor(RGB(0, 255, 255));
-            settextstyle(24, 0, "Consolas");
-            outtextxy(120, y, ">");
+            settextstyle(22, 0, "Consolas");
+            outtextxy((width - 300) / 2 + 10, y + 2, ">");
 
-            // 文字
             settextcolor(RGB(255, 255, 255));
         } else {
-            settextcolor(RGB(120, 120, 150));
+            settextcolor(RGB(100, 100, 130));
         }
 
-        settextstyle(24, 0, "Consolas");
+        settextstyle(22, 0, "Consolas");
         int itemW = textwidth(menuItems[i]);
-        outtextxy((width - itemW) / 2, y, menuItems[i]);
+        outtextxy((width - itemW) / 2 + 15, y + 3, menuItems[i]);
     }
 
-    // 排行榜预览（如果有记录）
+    // 排行榜预览
     int highScore = dataManager.getHighScore("Demo Song", (int)currentDifficulty);
     if (highScore > 0) {
         settextcolor(RGB(255, 215, 0));
-        settextstyle(16, 0, "Consolas");
+        settextstyle(14, 0, "Consolas");
         char lbStr[128];
         snprintf(lbStr, sizeof(lbStr), "Demo Song Best: %d", highScore);
         int lbW = textwidth(lbStr);
-        outtextxy((width - lbW) / 2, 430, lbStr);
+        outtextxy((width - lbW) / 2, 420, lbStr);
     }
 
-    // 操作提示
-    settextcolor(RGB(80, 80, 100));
-    settextstyle(14, 0, "Consolas");
+    // 底部提示
+    settextcolor(RGB(70, 70, 90));
+    settextstyle(13, 0, "Consolas");
     const char* hint1 = "W/S: Select  |  ENTER: Confirm";
-    const char* hint2 = "Put MP3 files in songs/ folder";
-    int h1W = textwidth(hint1);
-    int h2W = textwidth(hint2);
-    outtextxy((width - h1W) / 2, height - 60, hint1);
-    outtextxy((width - h2W) / 2, height - 38, hint2);
+    const char* hint2 = "MP3 files -> songs/ folder";
+    outtextxy((width - textwidth(hint1)) / 2, height - 55, hint1);
+    outtextxy((width - textwidth(hint2)) / 2, height - 35, hint2);
 
     // 版本号
-    settextcolor(RGB(60, 60, 80));
-    settextstyle(12, 0, "Consolas");
-    outtextxy(width - 100, height - 20, "V2.0");
+    settextcolor(RGB(50, 50, 70));
+    settextstyle(11, 0, "Consolas");
+    outtextxy(width - 80, height - 18, "V2.0");
 }
 
 // ========== 动态背景绘制 ==========
@@ -248,22 +272,33 @@ void GameWindow::drawAnimations() {
 // ========== UI绘制 ==========
 
 void GameWindow::drawUI() {
-    // 分数
+    using namespace _easyx_impl;
+    if (!g_window || !g_windowOpen) return;
+
+    // --- 左上角：分数面板 ---
+    // 半透明底板
+    sf::RectangleShape scorePanel({180.0f, 55.0f});
+    scorePanel.setPosition({10.0f, 10.0f});
+    scorePanel.setFillColor(sf::Color(0, 0, 0, 120));
+    scorePanel.setOutlineColor(sf::Color(255, 255, 255, 30));
+    scorePanel.setOutlineThickness(1.0f);
+    g_window->draw(scorePanel);
+
     settextcolor(RGB(255, 255, 255));
     settextstyle(24, 0, "Consolas");
     char scoreStr[64];
     snprintf(scoreStr, sizeof(scoreStr), "SCORE: %d", scoreSystem.getTotalScore());
-    outtextxy(20, 20, scoreStr);
+    outtextxy(20, 18, scoreStr);
 
     // 歌曲名和难度
-    settextcolor(RGB(100, 100, 130));
-    settextstyle(14, 0, "Consolas");
+    settextcolor(RGB(140, 140, 180));
+    settextstyle(13, 0, "Consolas");
     char songStr[128];
     snprintf(songStr, sizeof(songStr), "%s [%s]",
              currentSongName.c_str(), getDifficultyName());
-    outtextxy(20, 50, songStr);
+    outtextxy(20, 46, songStr);
 
-    // Combo数字（带跳动动画）+ 加成倍率显示
+    // --- 右上角：Combo面板 ---
     if (scoreSystem.getCurrentCombo() > 0) {
         int baseComboSize = 28 + std::min(scoreSystem.getCurrentCombo() / 10, 5) * 4;
 
@@ -290,9 +325,16 @@ void GameWindow::drawUI() {
         char comboStr[32];
         snprintf(comboStr, sizeof(comboStr), "%d COMBO", scoreSystem.getCurrentCombo());
         int comboW = textwidth(comboStr);
-        outtextxy(width - comboW - 20, 20, comboStr);
 
-        // 显示Combo加成倍率（V2.0新增）
+        // Combo底板
+        sf::RectangleShape comboPanel({(float)(comboW + 20), (float)(comboSize + 10)});
+        comboPanel.setPosition({(float)(width - comboW - 30), 10.0f});
+        comboPanel.setFillColor(sf::Color(0, 0, 0, 100));
+        g_window->draw(comboPanel);
+
+        outtextxy(width - comboW - 20, 15, comboStr);
+
+        // Combo加成倍率
         const char* comboLevel = scoreSystem.getComboLevel();
         if (comboLevel[0] != '\0') {
             settextstyle(18, 0, "Consolas");
@@ -300,16 +342,16 @@ void GameWindow::drawUI() {
             char levelStr[32];
             snprintf(levelStr, sizeof(levelStr), "BONUS %s", comboLevel);
             int levelW = textwidth(levelStr);
-            outtextxy(width - levelW - 20, 20 + comboSize + 5, levelStr);
+            outtextxy(width - levelW - 20, 15 + comboSize + 5, levelStr);
         }
     }
 
-    // 操作提示
-    settextcolor(RGB(100, 100, 100));
-    settextstyle(14, 0, "Consolas");
-    outtextxy(20, height - 30, "ESC: Menu  |  Keys: A S D F");
+    // --- 底部：判定统计面板 ---
+    sf::RectangleShape statPanel({280.0f, 48.0f});
+    statPanel.setPosition({10.0f, (float)(height - 58)});
+    statPanel.setFillColor(sf::Color(0, 0, 0, 100));
+    g_window->draw(statPanel);
 
-    // 判定统计
     settextstyle(14, 0, "Consolas");
     settextcolor(RGB(180, 180, 180));
     char statStr[128];
@@ -318,7 +360,12 @@ void GameWindow::drawUI() {
              scoreSystem.getGoodCount(),
              scoreSystem.getMissCount(),
              scoreSystem.getMaxCombo());
-    outtextxy(20, height - 55, statStr);
+    outtextxy(20, height - 52, statStr);
+
+    // 操作提示
+    settextcolor(RGB(100, 100, 100));
+    settextstyle(12, 0, "Consolas");
+    outtextxy(20, height - 28, "ESC: Menu  |  A S D F");
 }
 
 // ========== 结算界面（V2.0增强：显示排行榜） ==========
