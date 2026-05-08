@@ -47,26 +47,31 @@ bool DataManager::loadFromFile() {
         // 跳过注释和空行
         if (line.empty() || line[0] == '#') continue;
 
-        std::istringstream iss(line);
-        std::string token;
-        LeaderboardEntry entry;
+        try {
+            std::istringstream iss(line);
+            std::string token;
+            LeaderboardEntry entry;
 
-        // 解析字段：歌曲名|难度|最高分|最高Combo|游玩次数|最后游玩时间
-        if (std::getline(iss, entry.songName, '|') &&
-            std::getline(iss, token, '|') &&
-            std::getline(iss, token, '|')) {
-            entry.difficulty = std::stoi(token);
-            if (std::getline(iss, token, '|')) {
-                entry.highScore = std::stoi(token);
+            // 解析字段：歌曲名|难度|最高分|最高Combo|游玩次数|最后游玩时间
+            if (std::getline(iss, entry.songName, '|') &&
+                std::getline(iss, token, '|') &&
+                std::getline(iss, token, '|')) {
+                entry.difficulty = std::stoi(token);
                 if (std::getline(iss, token, '|')) {
-                    entry.maxCombo = std::stoi(token);
+                    entry.highScore = std::stoi(token);
                     if (std::getline(iss, token, '|')) {
-                        entry.playCount = std::stoi(token);
-                        std::getline(iss, entry.lastPlayed, '|');
-                        entries.push_back(entry);
+                        entry.maxCombo = std::stoi(token);
+                        if (std::getline(iss, token, '|')) {
+                            entry.playCount = std::stoi(token);
+                            std::getline(iss, entry.lastPlayed, '|');
+                            entries.push_back(entry);
+                        }
                     }
                 }
             }
+        } catch (const std::exception& e) {
+            // 跳过格式错误的行，避免崩溃
+            fprintf(stderr, "[DataManager] 跳过无效行: %s (%s)\n", line.c_str(), e.what());
         }
     }
 
