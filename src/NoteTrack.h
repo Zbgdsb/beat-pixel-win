@@ -52,16 +52,18 @@ public:
      * @details 绘制顺序：轨道背景 → 判定线 → 音符
      * @param tex 纹理管理器引用
      * @param glowAlpha 轨道发光透明度（0-255，按键按下时为255，松开后渐变到0）
+     * @param pressGlowAlpha V3.0: 按键按下瞬间发光透明度
      */
-    void draw(const TextureManager& tex, int glowAlpha);
+    void draw(const TextureManager& tex, int glowAlpha, int pressGlowAlpha = 0);
 
     /**
      * @brief 绘制按键按钮
      * @details 根据按键状态显示normal或pressed纹理
      * @param tex 纹理管理器引用
      * @param isPressed 按键是否按下
+     * @param scale V3.0: 按键缩放 (默认1.0)
      */
-    void drawKeyButton(const TextureManager& tex, bool isPressed);
+    void drawKeyButton(const TextureManager& tex, bool isPressed, float scale = 1.0f);
 
     /**
      * @brief 获取判定线Y坐标

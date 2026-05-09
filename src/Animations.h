@@ -48,3 +48,42 @@ struct ComboAnim {
     float duration = 0.35f;
     float elapsed = 0.0f;
 };
+
+// ========== V3.0新增：判定粒子特效 ==========
+
+/**
+ * @brief 判定粒子
+ * @details Perfect/Good判定时从判定位置炸开的彩色光点
+ */
+struct Particle {
+    float x, y;           // 当前位置
+    float vx, vy;         // 速度 (px/s)
+    float lifetime;        // 总寿命 (秒)
+    float elapsed = 0.0f;  // 已过时间
+    float size;            // 粒子大小 (半径)
+    sf::Color color;       // 颜色
+};
+
+/**
+ * @brief Miss叉号动画
+ * @details Miss判定时显示红色小叉，闪烁后消失
+ */
+struct MissCrossAnim {
+    float x, y;           // 中心坐标
+    float duration = 0.3f;
+    float elapsed = 0.0f;
+};
+
+// ========== V3.0新增：按键视觉反馈 ==========
+
+/**
+ * @brief 按键按下反馈状态
+ * @details 按下时轨道发光边框 + 按键图标放大
+ */
+struct KeyFeedback {
+    float glowTimer = 0.0f;      // 发光剩余时间 (秒)
+    float pressScale = 1.0f;     // 当前按键缩放 (1.0~1.1)
+    static constexpr float GLOW_DURATION = 0.1f;   // 发光持续时间
+    static constexpr float PRESS_SCALE_MAX = 1.1f;  // 按下最大缩放
+    static constexpr float SCALE_SPEED = 8.0f;      // 缩放动画速度
+};

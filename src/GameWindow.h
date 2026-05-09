@@ -33,6 +33,7 @@
 enum GameState {
     MENU,       // 主菜单（V2.0新增）
     PLAYING,    // 游戏中
+    PAUSED,     // V3.1: 游戏暂停
     RESULT      // 结算界面
 };
 
@@ -71,6 +72,17 @@ private:
     ComboAnim comboAnim;
     int prevCombo = 0;
 
+    // ========== V3.0新增：判定粒子特效 ==========
+    std::vector<Particle> particles;
+    std::vector<MissCrossAnim> missCrossAnims;
+
+    // ========== V3.0新增：按键视觉反馈 ==========
+    KeyFeedback keyFeedback[4];
+
+    // ========== V3.0新增：Combo断连闪烁 ==========
+    float comboBreakFlash = 0.0f;   // Combo断掉时的红色闪烁剩余时间
+    static constexpr float COMBO_BREAK_DURATION = 0.2f;  // 闪烁持续时间
+
     // ========== 按键状态管理 ==========
     bool keyPressed[4] = {false, false, false, false};
     bool keyWasPressed[4] = {false, false, false, false};
@@ -93,6 +105,40 @@ private:
 
     // 结算界面
     long long resultStartTime;
+
+    // ========== V3.0: BPM指示器 ==========
+    float currentBPM = 120.0f;        // 当前歌曲BPM
+    float bpmPulsePhase = 0.0f;       // BPM脉冲相位 (0~2π)
+    float bpmPulseScale = 1.0f;       // 当前脉冲缩放 (1.0~1.3)
+
+    // ========== V3.0: 音符预读条 ==========
+    static const float PREVIEW_DURATION; // 预览时长(秒)
+    static const int PREVIEW_HEIGHT;     // 预读条高度
+    static const int PREVIEW_Y;          // 预读条Y坐标
+
+    // ========== V3.1: 暂停功能 ==========
+    long long pauseStartTime = 0;        // 暂停开始时间(ms)
+    int pauseMenuSelection = 0;          // 暂停菜单选择索引 0:继续 1:重新开始 2:返回主菜单
+    bool escKeyReleased = true;          // ESC键防重复触发
+    int resultMenuSelection = 0;         // 结算菜单选择索引 0:重新开始 1:返回菜单
+
+    // ========== V3.1: 音量调节 ==========
+    float musicVolume = 1.0f;            // 背景音乐音量 0.0~1.0
+    float effectVolume = 1.0f;           // 音效音量 0.0~1.0
+    int settingsMenuSelection = 0;       // 设置菜单选择索引
+    bool isInSettings = false;            // 是否在设置界面
+    bool isAdjustingVolume = false;       // 是否正在调节音量
+
+    // ========== V3.1: 按键自定义 ==========
+    int customKeys[4] = {  // 自定义按键，存储虚拟键码，默认A/S/D/F
+        'A', 
+        'S', 
+        'D', 
+        'F'
+    };
+    int currentKeySettingIndex = -1; // 正在设置的按键索引，-1表示未在设置
+    bool keySettingWaitingRelease = false; // 等待按键松开标志
+    const char* getKeyName(int vkCode); // 虚拟键码转显示名称
 
     // 谱面数据
     std::vector<std::pair<long long, int>> noteTimeData;
@@ -123,6 +169,21 @@ private:
     void drawMenuScreen();
     void drawDynamicBackground();  // 动态背景
     void drawAnimations();
+    void drawBPMIndicator();     // V3.0: BPM指示器
+    void drawNotePreviewBar();   // V3.0: 音符预读条
+    void drawParticles();        // V3.0: 判定粒子特效
+    void drawProgressBar();      // V3.0: 歌曲进度条
+    void spawnParticles(float x, float y, Judgement j);  // V3.0: 生成粒子
+    void updateParticles(float dt);   // V3.0: 更新粒子
+    void updateKeyFeedback(float dt); // V3.0: 更新按键反馈
+    // ========== V3.1 新增方法 ==========
+    void drawPauseScreen();      // 暂停界面
+    void drawSettingsScreen();   // 设置界面
+    void drawNewResultScreen();  // 新结算界面
+    void handlePauseInput();     // 暂停界面输入处理
+    void handleSettingsInput();  // 设置界面输入处理
+    void loadConfig();           // 加载本地配置
+    void saveConfig();           // 保存本地配置
     int getTrackX(int trackId) const;
     bool isGameFinished() const;
     const char* getRating() const;

@@ -72,7 +72,7 @@ std::vector<AutoMissInfo> NoteTrack::update(long long currentTime, ScoreSystem& 
  * @param tex 纹理管理器引用
  * @param glowAlpha 轨道发光透明度（0-255）
  */
-void NoteTrack::draw(const TextureManager& tex, int glowAlpha) {
+void NoteTrack::draw(const TextureManager& tex, int glowAlpha, int pressGlowAlpha) {
     using namespace _easyx_impl;
     if (!g_window || !g_windowOpen) return;
 
@@ -97,6 +97,25 @@ void NoteTrack::draw(const TextureManager& tex, int glowAlpha) {
         glow.setPosition({(float)x, 0.0f});
         glow.setFillColor(sf::Color(255, 255, 255, (uint8_t)(glowAlpha * 0.15f)));
         g_window->draw(glow);
+    }
+
+    // V3.0: 按键瞬间发光边框（淡蓝色）
+    if (pressGlowAlpha > 0) {
+        // 左边框
+        sf::RectangleShape leftEdge({3.0f, (float)getheight()});
+        leftEdge.setPosition({(float)x, 0.0f});
+        leftEdge.setFillColor(sf::Color(100, 200, 255, (uint8_t)pressGlowAlpha));
+        g_window->draw(leftEdge);
+        // 右边框
+        sf::RectangleShape rightEdge({3.0f, (float)getheight()});
+        rightEdge.setPosition({(float)(x + width - 3), 0.0f});
+        rightEdge.setFillColor(sf::Color(100, 200, 255, (uint8_t)pressGlowAlpha));
+        g_window->draw(rightEdge);
+        // 内部淡蓝色叠加
+        sf::RectangleShape innerGlow({(float)width, (float)getheight()});
+        innerGlow.setPosition({(float)x, 0.0f});
+        innerGlow.setFillColor(sf::Color(100, 200, 255, (uint8_t)(pressGlowAlpha * 0.12f)));
+        g_window->draw(innerGlow);
     }
 
     // 3. 绘制判定线（纹理+后备实线双保险）
@@ -153,7 +172,7 @@ void NoteTrack::draw(const TextureManager& tex, int glowAlpha) {
  * @param tex 纹理管理器引用
  * @param isPressed 按键是否按下
  */
-void NoteTrack::drawKeyButton(const TextureManager& tex, bool isPressed) {
+void NoteTrack::drawKeyButton(const TextureManager& tex, bool isPressed, float scale) {
     using namespace _easyx_impl;
     if (!g_window || !g_windowOpen) return;
 
@@ -163,14 +182,15 @@ void NoteTrack::drawKeyButton(const TextureManager& tex, bool isPressed) {
     const float SIZE = 80.0f;
     const float SRC_W = (float)keyTex.getSize().x;  // 使用实际纹理宽度
     const float SRC_H = (float)keyTex.getSize().y;  // 使用实际纹理高度
-    float scale = SIZE / SRC_W;  // 按宽度缩放，保持原始比例
+    float baseScale = SIZE / SRC_W;  // 按宽度缩放，保持原始比例
+    float finalScale = baseScale * scale;  // 应用V3.0缩放参数
     float cx = x + width / 2.0f;
     float cy = judgeY + 50.0f + SIZE / 2.0f;
 
     // 直接绘制按键精灵，无底板矩形，透明背景
     sf::Sprite keySprite(keyTex);
     keySprite.setOrigin({SRC_W / 2.0f, SRC_H / 2.0f});
-    keySprite.setScale({scale, scale});
+    keySprite.setScale({finalScale, finalScale});
     keySprite.setPosition({cx, cy});
     g_window->draw(keySprite);
 }

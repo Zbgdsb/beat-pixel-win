@@ -26,6 +26,10 @@ const double GameWindow::DIFFICULTY_SPEEDS[3] = {
     6.67    // Hard: 400px/s
 };
 
+const float GameWindow::PREVIEW_DURATION = 5.0f;   // 预览未来5秒
+const int GameWindow::PREVIEW_HEIGHT = 50;          // 预读条高度
+const int GameWindow::PREVIEW_Y = 8;                // 预读条Y坐标
+
 GameWindow::GameWindow(int width, int height, int fps)
     : width(width), height(height), fps(fps),
       currentDifficulty(NORMAL),
@@ -115,6 +119,8 @@ void GameWindow::loadDemoSong() {
     }
     lastNoteTime = noteTimeData.back().first;
     currentSongName = "Demo Song";
+    currentBPM = 120.0f;  // Demo默认120 BPM
+    bpmPulsePhase = 0.0f;
 }
 
 /**
@@ -159,8 +165,12 @@ bool GameWindow::loadSongFromMP3(const std::string& filePath) {
         tracks[track]->addNote(std::move(note));
     }
 
-    printf("[GameWindow] 歌曲加载完成: %s (%zu个音符)\n",
-           currentSongName.c_str(), noteTimeData.size());
+    // 使用解析到的BPM
+    currentBPM = parseResult.detectedBPM > 0 ? parseResult.detectedBPM : 120.0f;
+    bpmPulsePhase = 0.0f;
+
+    printf("[GameWindow] 歌曲加载完成: %s (%zu个音符, BPM=%.0f)\n",
+           currentSongName.c_str(), noteTimeData.size(), currentBPM);
     fflush(stdout);
 
     return true;
@@ -211,7 +221,14 @@ bool GameWindow::init() {
     // 初始化数据管理器（排行榜）
     dataManager.init("/Users/Admin/Desktop/c++期末大作业/BeatPixel/leaderboard.dat");
 
+    // 加载本地配置（音量等）
+    loadConfig();
+
     audioManager.init();
+    // 设置初始音量
+    audioManager.setMusicVolume(musicVolume);
+    audioManager.setEffectVolume(effectVolume);
+
     isRunning = true;
     gameState = MENU;
     prevCombo = 0;

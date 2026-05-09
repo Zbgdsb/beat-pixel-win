@@ -172,6 +172,14 @@ void AudioManager::stopBGM() {
     if (bgmLoaded && bgmSound) bgmSound->stop();
 }
 
+void AudioManager::pauseBGM() {
+    if (bgmLoaded && bgmSound) bgmSound->pause();
+}
+
+void AudioManager::resumeBGM() {
+    if (bgmLoaded && bgmSound) bgmSound->play();
+}
+
 /**
  * @brief 播放按键音效
  * @details 先stop再play，复用同一个Sound对象，避免重复创建导致卡顿

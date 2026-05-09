@@ -34,6 +34,9 @@ private:
     bool bgmLoaded;
     bool sfxLoaded;
 
+    float m_musicVolume = 1.0f;   // 背景音乐音量
+    float m_effectVolume = 1.0f;  // 音效音量
+
     static std::vector<int16_t> generateTone(float freq, float duration,
                                               int sampleRate, float volume);
     static std::vector<int16_t> generateChord(float freq1, float freq2,
@@ -48,7 +51,25 @@ public:
 
     bool init();
     void playBGM();
+    void pauseBGM();  // 暂停BGM
+    void resumeBGM(); // 恢复BGM
     void stopBGM();
+
+    // 设置音量（0.0~1.0）
+    void setMusicVolume(float volume) {
+        m_musicVolume = std::max(0.0f, std::min(1.0f, volume));
+        if (bgmSound) bgmSound->setVolume(m_musicVolume * 100.0f);
+    }
+
+    void setEffectVolume(float volume) {
+        m_effectVolume = std::max(0.0f, std::min(1.0f, volume));
+        if (hitSound) hitSound->setVolume(m_effectVolume * 100.0f);
+        if (perfectSound) perfectSound->setVolume(m_effectVolume * 100.0f);
+        if (missSound) missSound->setVolume(m_effectVolume * 100.0f);
+    }
+
+    float getMusicVolume() const { return m_musicVolume; }
+    float getEffectVolume() const { return m_effectVolume; }
 
     /**
      * @brief 播放按键音效
