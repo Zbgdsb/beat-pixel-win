@@ -253,7 +253,6 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsViaPython() {
     std::string scriptPath = getExeDir() + "/tools/beat_detect.py";
     FILE* f = fopen(scriptPath.c_str(), "r");
     if (!f) {
-        // 尝试相对于exe的路径
         scriptPath = getExeDir() + "/../tools/beat_detect.py";
         f = fopen(scriptPath.c_str(), "r");
     }
@@ -273,7 +272,15 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsViaPython() {
     int ret = pclose(pipe);
     if (ret != 0 || json.empty()) return {};
 
-    // 简易JSON解析
+    // 检查success字段
+    size_t successPos = json.find("\"success\"");
+    if (successPos != std::string::npos) {
+        size_t colon = json.find(":", successPos);
+        if (colon != std::string::npos && json.substr(colon + 1, 5).find("false") != std::string::npos) {
+            return {};
+        }
+    }
+
     std::vector<BeatInfo> beats;
 
     // 提取bpm
@@ -283,38 +290,51 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsViaPython() {
         size_t end = json.find(",", colon);
         if (end == std::string::npos) end = json.find("}", colon);
         std::string val = json.substr(colon + 1, end - colon - 1);
-        // 去空格
         val.erase(0, val.find_first_not_of(" \t\n\r"));
         resultBPM = std::stof(val);
     }
 
-    // 提取beats数组
-    size_t beatsStart = json.find("[", json.find("\"beats\""));
-    if (beatsStart == std::string::npos) return {};
-
-    size_t pos = beatsStart + 1;
-    while (pos < json.size()) {
-        size_t timePos = json.find("\"timeMs\":", pos);
-        if (timePos == std::string::npos || timePos > json.find("]", beatsStart)) break;
-
-        size_t valStart = json.find(":", timePos) + 1;
-        size_t valEnd = json.find(",", valStart);
-        if (valEnd == std::string::npos) valEnd = json.find("}", valStart);
-        std::string timeStr = json.substr(valStart, valEnd - valStart);
-        timeStr.erase(0, timeStr.find_first_not_of(" \t\n\r"));
-
-        size_t accentPos = json.find("\"isAccent\":", timePos);
-        bool isAccent = false;
-        if (accentPos != std::string::npos && accentPos < json.find("}", timePos)) {
-            size_t aStart = json.find(":", accentPos) + 1;
-            std::string aStr = json.substr(aStart, 10);
-            isAccent = aStr.find("true") != std::string::npos;
+    // 新格式: 提取beat_times_ms数组
+    size_t btmsPos = json.find("\"beat_times_ms\"");
+    if (btmsPos != std::string::npos) {
+        size_t arrStart = json.find("[", btmsPos);
+        if (arrStart != std::string::npos) {
+            size_t arrEnd = json.find("]", arrStart);
+            std::string arr = json.substr(arrStart + 1, arrEnd - arrStart - 1);
+            // 解析逗号分隔的整数
+            size_t pos = 0;
+            while (pos < arr.size()) {
+                size_t next = arr.find(",", pos);
+                if (next == std::string::npos) next = arr.size();
+                std::string num = arr.substr(pos, next - pos);
+                num.erase(0, num.find_first_not_of(" \t\n\r"));
+                if (!num.empty()) {
+                    long long timeMs = std::stoll(num);
+                    beats.push_back({timeMs, 1.0f, false});
+                }
+                pos = next + 1;
+            }
         }
+    }
 
-        long long timeMs = std::stoll(timeStr);
-        beats.push_back({timeMs, 1.0f, isAccent});
-
-        pos = json.find("}", timePos) + 1;
+    // 旧格式兼容: 提取beats数组（含timeMs和isAccent）
+    if (beats.empty()) {
+        size_t beatsStart = json.find("[", json.find("\"beats\""));
+        if (beatsStart != std::string::npos) {
+            size_t pos = beatsStart + 1;
+            while (pos < json.size()) {
+                size_t timePos = json.find("\"timeMs\":", pos);
+                if (timePos == std::string::npos || timePos > json.find("]", beatsStart)) break;
+                size_t valStart = json.find(":", timePos) + 1;
+                size_t valEnd = json.find(",", valStart);
+                if (valEnd == std::string::npos) valEnd = json.find("}", valStart);
+                std::string timeStr = json.substr(valStart, valEnd - valStart);
+                timeStr.erase(0, timeStr.find_first_not_of(" \t\n\r"));
+                long long timeMs = std::stoll(timeStr);
+                beats.push_back({timeMs, 1.0f, false});
+                pos = json.find("}", timePos) + 1;
+            }
+        }
     }
 
     return beats;
