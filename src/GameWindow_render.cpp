@@ -1084,6 +1084,7 @@ void GameWindow::drawSettingsScreen() {
     const char* optionNames[] = {
         "Music Volume",
         "Effect Volume",
+        "Sound Pack",
         "Key 1 (Track 1)",
         "Key 2 (Track 2)",
         "Key 3 (Track 3)",
@@ -1095,6 +1096,7 @@ void GameWindow::drawSettingsScreen() {
     COLORREF optionTextColors[] = {
         RGB(200, 200, 255),
         RGB(200, 255, 200),
+        RGB(255, 200, 200),
         RGB(255, 220, 100),
         RGB(255, 220, 100),
         RGB(255, 220, 100),
@@ -1108,7 +1110,7 @@ void GameWindow::drawSettingsScreen() {
     float barWidth = 200.0f;
     float barHeight = 15.0f;
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 9; i++) {
         float currentY = optionY + i * optionH;
 
         // 选中效果
@@ -1117,8 +1119,9 @@ void GameWindow::drawSettingsScreen() {
             highlight.setPosition({panelX + (panelW - 400.0f) / 2.0f, currentY - 5.0f});
             highlight.setFillColor(sf::Color(80, 80, 100, 100));
             if (i < 2) highlight.setOutlineColor(sf::Color(100, 150, 255, 200));
-            else if (i < 6) highlight.setOutlineColor(sf::Color(255, 200, 100, 200));
-            else if (i == 6) highlight.setOutlineColor(sf::Color(255, 100, 100, 200));
+            else if (i == 2) highlight.setOutlineColor(sf::Color(255, 100, 100, 200));
+            else if (i < 7) highlight.setOutlineColor(sf::Color(255, 200, 100, 200));
+            else if (i == 7) highlight.setOutlineColor(sf::Color(255, 100, 100, 200));
             else highlight.setOutlineColor(sf::Color(100, 255, 100, 200));
             highlight.setOutlineThickness(1.5f);
             g_window->draw(highlight);
@@ -1154,13 +1157,20 @@ void GameWindow::drawSettingsScreen() {
             snprintf(percentStr, sizeof(percentStr), "%d%%", (int)(value * 100.0f));
             outtextxy((int)(panelX + panelW - 50 + 10), (int)(currentY), percentStr);
         }
-        // 按键设置（2-5选项）
-        else if (i < 6) {
-            int keyIdx = i - 2;
+        // 音效包选项
+        else if (i == 2) {
+            const char* packNames[] = {"Ding-Dong", "Percussion"};
+            int pack = audioManager.getSoundPack();
+            settextcolor(pack == 0 ? RGB(200, 200, 255) : RGB(255, 100, 100));
+            settextstyle(20, 0, "Consolas");
+            outtextxy((int)(panelX + panelW - 180), (int)(currentY), packNames[pack]);
+        }
+        // 按键设置（3-6选项）
+        else if (i < 7) {
+            int keyIdx = i - 3;
             const char* keyName = getKeyName(customKeys[keyIdx]);
             settextcolor(currentKeySettingIndex == keyIdx ? RGB(255, 100, 100) : RGB(255, 255, 255));
             settextstyle(24, 0, "Consolas");
-            int keyNameW = textwidth(keyName);
             const char* displayStr = keyName;
             if (currentKeySettingIndex == keyIdx) {
                 displayStr = keySettingWaitingRelease ? "[PRESS KEY]" : "[RELEASE KEYS...]";

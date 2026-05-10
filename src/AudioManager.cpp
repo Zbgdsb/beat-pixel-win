@@ -52,6 +52,65 @@ std::vector<int16_t> AudioManager::generateTone(float freq, float duration,
     return samples;
 }
 
+// V3.5: 打击乐音效生成
+std::vector<int16_t> AudioManager::generateKick(float duration, int sampleRate, float volume) {
+    int numSamples = (int)(sampleRate * duration);
+    std::vector<int16_t> samples(numSamples);
+    for (int i = 0; i < numSamples; i++) {
+        float t = (float)i / sampleRate;
+        float envelope = std::exp(-t * 20.0f); // 快速衰减
+        float freq = 150.0f * std::exp(-t * 15.0f); // 频率快速下降（bass drum特征）
+        float value = volume * envelope * std::sin(2.0f * M_PI * freq * t);
+        samples[i] = (int16_t)(value * 32000.0f);
+    }
+    return samples;
+}
+
+std::vector<int16_t> AudioManager::generateSnare(float duration, int sampleRate, float volume) {
+    int numSamples = (int)(sampleRate * duration);
+    std::vector<int16_t> samples(numSamples);
+    // 用静态随机种子产生一致的噪声
+    unsigned int seed = 12345;
+    for (int i = 0; i < numSamples; i++) {
+        float t = (float)i / sampleRate;
+        float envelope = std::exp(-t * 25.0f);
+        // 噪声 + 低频共振
+        seed = seed * 1103515245 + 12345;
+        float noise = ((seed >> 16) & 0x7FFF) / 32768.0f - 0.5f;
+        float tone = std::sin(2.0f * M_PI * 200.0f * t) * 0.3f;
+        float value = volume * envelope * (noise * 0.7f + tone);
+        samples[i] = (int16_t)(value * 32000.0f);
+    }
+    return samples;
+}
+
+std::vector<int16_t> AudioManager::generateHihat(float duration, int sampleRate, float volume) {
+    int numSamples = (int)(sampleRate * duration);
+    std::vector<int16_t> samples(numSamples);
+    unsigned int seed = 67890;
+    for (int i = 0; i < numSamples; i++) {
+        float t = (float)i / sampleRate;
+        float envelope = std::exp(-t * 40.0f); // 极快衰减
+        seed = seed * 1103515245 + 12345;
+        float noise = ((seed >> 16) & 0x7FFF) / 32768.0f - 0.5f;
+        float value = volume * envelope * noise;
+        samples[i] = (int16_t)(value * 32000.0f);
+    }
+    return samples;
+}
+
+std::vector<int16_t> AudioManager::generateTom(float freq, float duration, int sampleRate, float volume) {
+    int numSamples = (int)(sampleRate * duration);
+    std::vector<int16_t> samples(numSamples);
+    for (int i = 0; i < numSamples; i++) {
+        float t = (float)i / sampleRate;
+        float envelope = std::exp(-t * 12.0f);
+        float value = volume * envelope * std::sin(2.0f * M_PI * freq * t);
+        samples[i] = (int16_t)(value * 32000.0f);
+    }
+    return samples;
+}
+
 std::vector<int16_t> AudioManager::generateChord(float freq1, float freq2,
                                                    float duration, int sampleRate, float volume) {
     auto tone1 = generateTone(freq1, duration, sampleRate, volume * 0.6f);
@@ -149,18 +208,33 @@ bool AudioManager::generateBGM() {
 }
 
 bool AudioManager::generateSFX() {
-    auto perfectData = generateChord(523.25f, 659.25f, 0.15f, SAMPLE_RATE, SFX_VOLUME);
-    if (!loadBuffer(perfectBuffer, perfectData)) return false;
-    perfectSound = std::make_unique<sf::Sound>(perfectBuffer);
+    if (soundPack == 1) {
+        // 打击乐音效包
+        auto perfectData = generateSnare(0.12f, SAMPLE_RATE, SFX_VOLUME * 0.9f);
+        if (!loadBuffer(perfectBuffer, perfectData)) return false;
+        perfectSound = std::make_unique<sf::Sound>(perfectBuffer);
 
-    auto hitData = generateTone(392.0f, 0.12f, SAMPLE_RATE, SFX_VOLUME);
-    if (!loadBuffer(hitBuffer, hitData)) return false;
-    hitSound = std::make_unique<sf::Sound>(hitBuffer);
+        auto hitData = generateTom(300.0f, 0.10f, SAMPLE_RATE, SFX_VOLUME * 0.8f);
+        if (!loadBuffer(hitBuffer, hitData)) return false;
+        hitSound = std::make_unique<sf::Sound>(hitBuffer);
 
-    auto missData = generateTone(150.0f, 0.08f, SAMPLE_RATE, SFX_VOLUME * 0.6f);
-    if (!loadBuffer(missBuffer, missData)) return false;
-    missSound = std::make_unique<sf::Sound>(missBuffer);
+        auto missData = generateHihat(0.06f, SAMPLE_RATE, SFX_VOLUME * 0.5f);
+        if (!loadBuffer(missBuffer, missData)) return false;
+        missSound = std::make_unique<sf::Sound>(missBuffer);
+    } else {
+        // 默认叮咚音效
+        auto perfectData = generateChord(523.25f, 659.25f, 0.15f, SAMPLE_RATE, SFX_VOLUME);
+        if (!loadBuffer(perfectBuffer, perfectData)) return false;
+        perfectSound = std::make_unique<sf::Sound>(perfectBuffer);
 
+        auto hitData = generateTone(392.0f, 0.12f, SAMPLE_RATE, SFX_VOLUME);
+        if (!loadBuffer(hitBuffer, hitData)) return false;
+        hitSound = std::make_unique<sf::Sound>(hitBuffer);
+
+        auto missData = generateTone(150.0f, 0.08f, SAMPLE_RATE, SFX_VOLUME * 0.6f);
+        if (!loadBuffer(missBuffer, missData)) return false;
+        missSound = std::make_unique<sf::Sound>(missBuffer);
+    }
     sfxLoaded = true;
     return true;
 }

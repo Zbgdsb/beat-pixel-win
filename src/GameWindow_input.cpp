@@ -1377,28 +1377,34 @@ void GameWindow::handleSettingsInput() {
     // 上下切换选项
     if (upPressed && !keyUpWasPressed) {
         keyUpWasPressed = true;
-        settingsMenuSelection = (settingsMenuSelection - 1 + 8) % 8;
+        settingsMenuSelection = (settingsMenuSelection - 1 + 9) % 9;
     } else if (!upPressed) {
         keyUpWasPressed = false;
     }
 
     if (downPressed && !keyDownWasPressed) {
         keyDownWasPressed = true;
-        settingsMenuSelection = (settingsMenuSelection + 1) % 8;
+        settingsMenuSelection = (settingsMenuSelection + 1) % 9;
     } else if (!downPressed) {
         keyDownWasPressed = false;
     }
 
-    // 左右调整音量（只有前2个选项）
-    if (settingsMenuSelection < 2) {
+    // 左右调整（音量和音效包）
+    if (settingsMenuSelection < 3) {
         if (leftPressed && !keyLeftWasPressed) {
             keyLeftWasPressed = true;
             if (settingsMenuSelection == 0) {
                 musicVolume = std::max(0.0f, musicVolume - 0.1f);
                 audioManager.setMusicVolume(musicVolume);
-            } else {
+            } else if (settingsMenuSelection == 1) {
                 effectVolume = std::max(0.0f, effectVolume - 0.1f);
                 audioManager.setEffectVolume(effectVolume);
+                audioManager.playHit(false);
+            } else {
+                // 音效包切换
+                int pack = audioManager.getSoundPack();
+                pack = (pack - 1 + 2) % 2;
+                audioManager.setSoundPack(pack);
                 audioManager.playHit(false);
             }
         } else if (!leftPressed) {
@@ -1410,9 +1416,14 @@ void GameWindow::handleSettingsInput() {
             if (settingsMenuSelection == 0) {
                 musicVolume = std::min(1.0f, musicVolume + 0.1f);
                 audioManager.setMusicVolume(musicVolume);
-            } else {
+            } else if (settingsMenuSelection == 1) {
                 effectVolume = std::min(1.0f, effectVolume + 0.1f);
                 audioManager.setEffectVolume(effectVolume);
+                audioManager.playHit(false);
+            } else {
+                int pack = audioManager.getSoundPack();
+                pack = (pack + 1) % 2;
+                audioManager.setSoundPack(pack);
                 audioManager.playHit(false);
             }
         } else if (!rightPressed) {
@@ -1425,19 +1436,19 @@ void GameWindow::handleSettingsInput() {
         enterWasPressed = true;
 
         // 按键设置选项
-        if (settingsMenuSelection >= 2 && settingsMenuSelection < 6) {
-            currentKeySettingIndex = settingsMenuSelection - 2;
-            keySettingWaitingRelease = false; // 进入设置模式，先等待按键松开
+        if (settingsMenuSelection >= 3 && settingsMenuSelection < 7) {
+            currentKeySettingIndex = settingsMenuSelection - 3;
+            keySettingWaitingRelease = false;
         }
         // 恢复默认按键
-        else if (settingsMenuSelection == 6) {
+        else if (settingsMenuSelection == 7) {
             customKeys[0] = 'A';
             customKeys[1] = 'S';
             customKeys[2] = 'D';
             customKeys[3] = 'F';
         }
         // 保存返回
-        else if (settingsMenuSelection == 7) {
+        else if (settingsMenuSelection == 8) {
             saveConfig();
             isInSettings = false;
             settingsMenuSelection = 0;
@@ -1513,6 +1524,7 @@ void GameWindow::saveConfig() {
         fprintf(fp, "key2 = %d\n", customKeys[1]);
         fprintf(fp, "key3 = %d\n", customKeys[2]);
         fprintf(fp, "key4 = %d\n", customKeys[3]);
+        fprintf(fp, "sound_pack = %d\n", audioManager.getSoundPack());
         fclose(fp);
         printf("[Config] Saved config\n");
     }
@@ -1544,6 +1556,10 @@ void GameWindow::loadConfig(const std::string& path) {
                 int k;
                 sscanf(line, "key4 = %d", &k);
                 customKeys[3] = k;
+            } else if (strstr(line, "sound_pack")) {
+                int sp;
+                sscanf(line, "sound_pack = %d", &sp);
+                audioManager.setSoundPack(sp);
             }
         }
         fclose(fp);

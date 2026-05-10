@@ -86,6 +86,12 @@ private:
                                               int sampleRate, float volume);
     static std::vector<int16_t> generateChord(float freq1, float freq2,
                                                float duration, int sampleRate, float volume);
+    // V3.5: 打击乐音效
+    static std::vector<int16_t> generateKick(float duration, int sampleRate, float volume);
+    static std::vector<int16_t> generateSnare(float duration, int sampleRate, float volume);
+    static std::vector<int16_t> generateHihat(float duration, int sampleRate, float volume);
+    static std::vector<int16_t> generateTom(float freq, float duration, int sampleRate, float volume);
+    int soundPack = 0; // 0=叮咚 1=打击乐
     bool loadBuffer(sf::SoundBuffer& buffer, const std::vector<int16_t>& data);
     bool generateBGM();
     bool generateSFX();
@@ -116,6 +122,10 @@ public:
 
     float getMusicVolume() const { return m_musicVolume; }
     float getEffectVolume() const { return m_effectVolume; }
+
+    // V3.5: 音效包
+    void setSoundPack(int pack) { soundPack = pack; generateSFX(); }
+    int getSoundPack() const { return soundPack; }
 
     /**
      * @brief 播放按键音效
