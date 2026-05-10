@@ -619,6 +619,33 @@ void GameWindow::handleInput() {
     } else if (!escPressed) {
         escKeyReleased = true;
     }
+
+    // V3.3: F1/F2 游戏内实时偏移调整 (±10ms)
+    if (gameState == PLAYING) {
+        static bool f1WasPressed = false, f2WasPressed = false;
+        bool f1Pressed = (GetAsyncKeyState(VK_F1) & 0x8000) != 0;
+        bool f2Pressed = (GetAsyncKeyState(VK_F2) & 0x8000) != 0;
+
+        if (f1Pressed && !f1WasPressed) {
+            gameOffsetMs -= 10.0f;
+            // 实时移动所有音符
+            for (auto& track : tracks) {
+                track->applyTimeOffset(-10.0);
+            }
+            printf("[GameWindow] Offset: %.0fms\n", gameOffsetMs);
+            fflush(stdout);
+        }
+        if (f2Pressed && !f2WasPressed) {
+            gameOffsetMs += 10.0f;
+            for (auto& track : tracks) {
+                track->applyTimeOffset(10.0);
+            }
+            printf("[GameWindow] Offset: %.0fms\n", gameOffsetMs);
+            fflush(stdout);
+        }
+        f1WasPressed = f1Pressed;
+        f2WasPressed = f2Pressed;
+    }
 }
 
 // ========== 结算输入处理 ==========

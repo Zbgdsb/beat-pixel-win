@@ -71,6 +71,9 @@ public:
     int getTrack() const { return track; }
     bool getIsJudged() const { return isJudged; }
     long long getJudgeTime() const { return judgeTime; }
+
+    // V3.3: 实时偏移调整
+    void shiftTime(double offsetMs) { judgeTime += (long long)offsetMs; }
     int getY() const { return y; }
 };
 

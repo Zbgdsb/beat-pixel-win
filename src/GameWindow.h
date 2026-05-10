@@ -75,6 +75,7 @@ private:
     int analysisMenuSelection = 0;      // 分析界面菜单选择 0:BPM 1:偏移 2:开始 3:导出 4:返回
     float manualBPM = 0;               // 手动BPM（0表示用自动检测的）
     float manualOffset = 0;            // 手动偏移(ms)
+    float gameOffsetMs = 0.0f;         // V3.3: 游戏内实时偏移补偿(ms)
     bool analysisDone = false;          // 分析是否完成
     bool isInTapping = false;           // 是否在点拍模式
 

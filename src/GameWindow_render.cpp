@@ -694,6 +694,17 @@ void GameWindow::drawUI() {
              currentSongName.c_str(), getDifficultyName());
     outtextxy(20, 46, songStr);
 
+    // V3.3: 偏移量显示 + F1/F2提示
+    if (gameOffsetMs != 0.0f) {
+        settextcolor(RGB(255, 200, 50));
+    } else {
+        settextcolor(RGB(100, 100, 130));
+    }
+    settextstyle(12, 0, "Consolas");
+    char offsetStr[64];
+    snprintf(offsetStr, sizeof(offsetStr), "Offset: %.0fms  [F1:-10ms  F2:+10ms]", gameOffsetMs);
+    outtextxy(20, 63, offsetStr);
+
     // --- 右上角：Combo面板 ---
     // V3.0: Combo断连红色闪烁
     if (comboBreakFlash > 0.0f) {

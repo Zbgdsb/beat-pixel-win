@@ -76,6 +76,11 @@ public:
     int getX() const { return x; }
 
     /**
+     * @brief V3.3: 实时偏移调整，移动所有音符的时间戳
+     */
+    void applyTimeOffset(double offsetMs);
+
+    /**
      * @brief 判定结果（包含判定等级和音符位置信息，用于触发动画）
      */
     struct JudgeResult {

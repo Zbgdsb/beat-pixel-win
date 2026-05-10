@@ -29,6 +29,14 @@ void NoteTrack::addNote(std::unique_ptr<Note> note) {
     notes.push_back(std::move(note));
 }
 
+void NoteTrack::applyTimeOffset(double offsetMs) {
+    for (auto& note : notes) {
+        if (!note->getIsJudged()) {
+            note->shiftTime(offsetMs);
+        }
+    }
+}
+
 /**
  * @brief 更新轨道上所有音符状态
  * @details 1. 更新每个音符位置
