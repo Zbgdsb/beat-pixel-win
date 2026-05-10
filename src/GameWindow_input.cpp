@@ -569,8 +569,8 @@ void GameWindow::handleInput() {
                     // V3.0: 判定粒子特效
                     spawnParticles(getTrackX(i) + TRACK_WIDTH / 2.0f, result.noteY, result.judgement);
 
-                    if (result.judgement == PERFECT) audioManager.playHit(true);
-                    else if (result.judgement == GOOD) audioManager.playHit(false);
+                    if (result.judgement == PERFECT) audioManager.playHit(true, i);
+                    else if (result.judgement == GOOD) audioManager.playHit(false, i);
                     else if (result.judgement == MISS) audioManager.playMiss();
                 }
 

@@ -92,6 +92,9 @@ private:
     static std::vector<int16_t> generateHihat(float duration, int sampleRate, float volume);
     static std::vector<int16_t> generateTom(float freq, float duration, int sampleRate, float volume);
     int soundPack = 0; // 0=叮咚 1=打击乐
+    // V3.5: 4轨道独立鼓声音效
+    sf::SoundBuffer trackBuffers[4];
+    std::unique_ptr<sf::Sound> trackSounds[4];
     bool loadBuffer(sf::SoundBuffer& buffer, const std::vector<int16_t>& data);
     bool generateBGM();
     bool generateSFX();
@@ -131,7 +134,7 @@ public:
      * @brief 播放按键音效
      * @details 复用Sound对象，先stop再play，避免重复触发导致卡顿
      */
-    void playHit(bool isPerfect);
+    void playHit(bool isPerfect, int track = -1);
     void playMiss();
 
     /**

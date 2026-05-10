@@ -209,16 +209,33 @@ bool AudioManager::generateBGM() {
 
 bool AudioManager::generateSFX() {
     if (soundPack == 1) {
-        // 打击乐音效包
-        auto perfectData = generateSnare(0.12f, SAMPLE_RATE, SFX_VOLUME * 0.9f);
+        // 打击乐音效包 - 4轨道独立鼓声
+        // Track 0 (A): Kick 底鼓
+        auto kickData = generateKick(0.15f, SAMPLE_RATE, SFX_VOLUME * 0.9f);
+        if (!loadBuffer(trackBuffers[0], kickData)) return false;
+        trackSounds[0] = std::make_unique<sf::Sound>(trackBuffers[0]);
+
+        // Track 1 (S): Snare 军鼓
+        auto snareData = generateSnare(0.12f, SAMPLE_RATE, SFX_VOLUME * 0.85f);
+        if (!loadBuffer(trackBuffers[1], snareData)) return false;
+        trackSounds[1] = std::make_unique<sf::Sound>(trackBuffers[1]);
+
+        // Track 2 (D): Hi-hat 踩镲
+        auto hihatData = generateHihat(0.06f, SAMPLE_RATE, SFX_VOLUME * 0.7f);
+        if (!loadBuffer(trackBuffers[2], hihatData)) return false;
+        trackSounds[2] = std::make_unique<sf::Sound>(trackBuffers[2]);
+
+        // Track 3 (F): Tom 嗵鼓
+        auto tomData = generateTom(250.0f, 0.13f, SAMPLE_RATE, SFX_VOLUME * 0.8f);
+        if (!loadBuffer(trackBuffers[3], tomData)) return false;
+        trackSounds[3] = std::make_unique<sf::Sound>(trackBuffers[3]);
+
+        // Perfect/Miss保留作为通用音效
+        auto perfectData = generateSnare(0.10f, SAMPLE_RATE, SFX_VOLUME * 0.95f);
         if (!loadBuffer(perfectBuffer, perfectData)) return false;
         perfectSound = std::make_unique<sf::Sound>(perfectBuffer);
 
-        auto hitData = generateTom(300.0f, 0.10f, SAMPLE_RATE, SFX_VOLUME * 0.8f);
-        if (!loadBuffer(hitBuffer, hitData)) return false;
-        hitSound = std::make_unique<sf::Sound>(hitBuffer);
-
-        auto missData = generateHihat(0.06f, SAMPLE_RATE, SFX_VOLUME * 0.5f);
+        auto missData = generateHihat(0.05f, SAMPLE_RATE, SFX_VOLUME * 0.4f);
         if (!loadBuffer(missBuffer, missData)) return false;
         missSound = std::make_unique<sf::Sound>(missBuffer);
     } else {
@@ -324,8 +341,12 @@ bool AudioManager::playOriginalSong(const std::string& filePath) {
  * @brief 播放按键音效
  * @details 先stop再play，复用同一个Sound对象，避免重复创建导致卡顿
  */
-void AudioManager::playHit(bool isPerfect) {
-    if (isPerfect && perfectSound) {
+void AudioManager::playHit(bool isPerfect, int track) {
+    if (soundPack == 1 && track >= 0 && track < 4 && trackSounds[track]) {
+        // 打击乐模式：每个轨道独立鼓声
+        trackSounds[track]->stop();
+        trackSounds[track]->play();
+    } else if (isPerfect && perfectSound) {
         perfectSound->stop();
         perfectSound->play();
     } else if (hitSound) {
