@@ -6,6 +6,9 @@
  *          按键音效复用Sound对象，避免重复创建导致卡顿
  */
 #include "AudioManager.h"
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 static const int SAMPLE_RATE = 44100;
 static const float BGM_VOLUME = 0.20f;

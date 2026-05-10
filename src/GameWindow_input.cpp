@@ -78,6 +78,12 @@
 #include "GameWindow.h"
 #include <cstdio>
 
+// MSVC兼容
+#ifdef _MSC_VER
+#define popen _popen
+#define pclose _pclose
+#endif
+
 // ========== 鼠标点击辅助函数 ==========
 
 bool GameWindow::isMouseClick() {

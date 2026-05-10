@@ -11,48 +11,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup MinGW
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup SFML
         shell: pwsh
         run: |
-          choco install mingw -y --no-progress
-          $mingwPath = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\mingw64\bin"
-          echo "$mingwPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          g++ --version
-
-      - name: Download SFML
-        shell: bash
-        run: |
-          curl -fsSL -o sfml.zip "https://github.com/SFML/SFML/releases/download/2.6.1/SFML-2.6.1-windows-gcc-13.1.0-mingw-64-bit.zip"
-          unzip -q sfml.zip
-          mv SFML-2.6.1 sfml-mingw
-          ls sfml-mingw/include/ 2>/dev/null
+          # 下载SFML for MSVC
+          Invoke-WebRequest -Uri "https://github.com/SFML/SFML/releases/download/2.6.1/SFML-2.6.1-windows-vc17-64-bit.zip" -OutFile sfml.zip
+          Expand-Archive -Path sfml.zip -DestinationPath .
+          Rename-Item "SFML-2.6.1" "sfml"
+          dir sfml/lib/
 
       - name: Build
-        shell: bash
+        shell: cmd
         run: |
-          mkdir -p build-win
-          SFML_INC="-Isfml-mingw/include"
-          SFML_LIB="-Lsfml-mingw/lib -lsfml-graphics -lsfml-window -lsfml-system -lsfml-audio -lwinmm -lopengl32 -lgdi32 -luser32"
-          for f in src/*.cpp; do
-            obj="build-win/$(basename "$f" .cpp).o"
-            echo "Compiling $f ..."
-            g++ -std=c++17 -O2 -Wall -DBEATPIXEL_USE_SFML $SFML_INC -c -o "$obj" "$f" || exit 1
-          done
-          echo "Linking..."
-          g++ -std=c++17 -O2 -o BeatPixel.exe build-win/*.o $SFML_LIB || exit 1
-          echo "Build success!"
+          mkdir build-win
+          set SFML_DIR=sfml
+          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\main.obj src\main.cpp
+          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\GameWindow.obj src\GameWindow.cpp
+          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\NoteTrack.obj src\NoteTrack.cpp
+          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\Note.obj src\Note.cpp
+          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\ScoreSystem.obj src\ScoreSystem.cpp
+          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\AudioManager.obj src\AudioManager.cpp
+          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\BeatParser.obj src\BeatParser.cpp
+          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\DataManager.obj src\DataManager.cpp
+          link /OUT:BeatPixel.exe build-win\*.obj /LIBPATH:%SFML_DIR%\lib sfml-graphics.lib sfml-window.lib sfml-system.lib sfml-audio.lib opengl32.lib gdi32.lib user32.lib advapi32.lib winmm.lib
 
       - name: Package
         shell: bash
         run: |
           mkdir -p dist
           cp BeatPixel.exe dist/
-          # 复制SFML DLL
-          cp sfml-mingw/bin/*.dll dist/ 2>/dev/null || true
+          cp sfml/bin/sfml-*.dll dist/ 2>/dev/null || true
+          cp sfml/bin/openal*.dll dist/ 2>/dev/null || true
           cp -r assets dist/ 2>/dev/null || true
           cp -r songs dist/ 2>/dev/null || true
           echo "双击 BeatPixel.exe 运行游戏" > dist/运行说明.txt
-          echo "需要保持所有文件在同一目录" >> dist/运行说明.txt
+          echo "=== 文件列表 ==="
+          ls -la dist/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

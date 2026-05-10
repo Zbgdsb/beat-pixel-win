@@ -141,7 +141,7 @@ bool BeatParser::loadAudioFile(const std::string& filePath) {
 
     sampleRate = file.getSampleRate();
     unsigned int channelCount = file.getChannelCount();
-    std::uint64_t totalFrames = file.getDuration().asMilliseconds() * sampleRate / 1000;
+    std::uint64_t totalFrames = file.getSampleCount() / channelCount;
 
     if (sampleRate == 0 || channelCount == 0 || totalFrames == 0) {
         fprintf(stderr, "[BeatParser] 音频参数异常\n");

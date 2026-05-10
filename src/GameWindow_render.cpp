@@ -509,14 +509,14 @@ void GameWindow::drawParticles() {
         sf::RectangleShape line1({size * 2.0f, thickness});
         line1.setOrigin({size, thickness / 2.0f});
         line1.setPosition({cross.x, cross.y});
-        line1.setRotation(sf::degrees(45.0f));
+        line1.setRotation(45.0f);
         line1.setFillColor(sf::Color(255, 60, 60, alpha));
         g_window->draw(line1);
 
         sf::RectangleShape line2({size * 2.0f, thickness});
         line2.setOrigin({size, thickness / 2.0f});
         line2.setPosition({cross.x, cross.y});
-        line2.setRotation(sf::degrees(-45.0f));
+        line2.setRotation(-45.0f);
         line2.setFillColor(sf::Color(255, 60, 60, alpha));
         g_window->draw(line2);
     }

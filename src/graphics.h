@@ -255,18 +255,17 @@ namespace _easyx_impl {
         if (g_fontLoaded) return true;
         // macOS常见中文字体路径
         const char* fontPaths[] = {
+            "C:/Windows/Fonts/msyh.ttc",     // Windows 微软雅黑（中文）
+            "C:/Windows/Fonts/simhei.ttf",    // Windows 黑体
+            "C:/Windows/Fonts/simsun.ttc",    // Windows 宋体
+            "C:/Windows/Fonts/consola.ttf",   // Windows Consolas
             "/System/Library/Fonts/STHeiti Medium.ttc",
             "/System/Library/Fonts/Hiragino Sans GB.ttc",
             "/System/Library/Fonts/Menlo.ttc",
-            "/System/Library/Fonts/HelveticaNeue.ttc",
-            "/Library/Fonts/Arial Unicode.ttf",
-            "/Library/Fonts/Arial.ttf",
-            "/System/Library/Fonts/Monaco.dfont",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", // Linux
-            "C:/Windows/Fonts/consola.ttf", // Windows备用
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         };
         for (const char* path : fontPaths) {
-            if (g_font.openFromFile(path)) {
+            if (g_font.loadFromFile(path)) {
                 g_fontLoaded = true;
                 return true;
             }
@@ -432,7 +431,7 @@ inline void line(int x1, int y1, int x2, int y2) {
     lineShape.setFillColor(g_lineColor);
 
     float angle = std::atan2(dy, dx) * 180.0f / 3.14159265f;
-    lineShape.setRotation(sf::degrees(angle));
+    lineShape.setRotation(angle);
     g_window->draw(lineShape);
 }
 
@@ -462,7 +461,7 @@ inline void outtextxy(int x, int y, const char* str) {
     using namespace _easyx_impl;
     if (!g_window || !g_windowOpen || !g_fontLoaded) return;
 
-    sf::Text text(g_font, toSfString(str), g_textSize);
+    sf::Text text(toSfString(str), g_font, g_textSize);
     text.setPosition({(float)x, (float)y});
     text.setFillColor(g_textColor);
     g_window->draw(text);
@@ -475,8 +474,8 @@ inline int textwidth(const char* str) {
     using namespace _easyx_impl;
     if (!g_fontLoaded) return (int)strlen(str) * 10;
 
-    sf::Text text(g_font, toSfString(str), g_textSize);
-    return (int)text.getLocalBounds().size.x;
+    sf::Text text(toSfString(str), g_font, g_textSize);
+    return (int)text.getLocalBounds().width;
 }
 
 /**
@@ -516,8 +515,9 @@ inline void FlushBatchDraw() {
 inline bool processWindowEvents() {
     using namespace _easyx_impl;
     if (!g_window || !g_windowOpen) return false;
-    while (const auto event = g_window->pollEvent()) {
-        if (event->is<sf::Event::Closed>()) {
+    sf::Event event;
+    while (g_window->pollEvent(event)) {
+        if (event.type == sf::Event::Closed) {
             g_windowOpen = false;
             g_window->close();
             return false;

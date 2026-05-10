@@ -15,6 +15,8 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <cstring>
+#include <cmath>
 namespace sf {
     class SoundBuffer {
     public:
