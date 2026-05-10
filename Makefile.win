@@ -1,0 +1,42 @@
+# BeatPixel Windows交叉编译 Makefile (macOS -> Windows)
+# 使用方法: make -f Makefile.win
+
+CXX = x86_64-w64-mingw32-g++
+CXXFLAGS = -std=c++17 -O2 -Wall -DBEATPIXEL_USE_SFML -I./sfml-mingw/include
+
+SFML_DIR = ./sfml-mingw
+SFML_LIBS = -L$(SFML_DIR)/lib -lsfml-graphics -lsfml-window -lsfml-system -lsfml-audio -lwinmm -lopengl32 -lgdi32 -luser32
+
+SRC_DIR = src
+BUILD_DIR = build-win
+TARGET = BeatPixel.exe
+
+SRCS = $(wildcard $(SRC_DIR)/*.cpp)
+OBJS = $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(SRCS))
+
+.PHONY: all clean sfml
+
+all: sfml $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(SFML_LIBS)
+
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
+sfml:
+	@if [ ! -d "$(SFML_DIR)" ]; then \
+		echo "下载SFML Windows库..."; \
+		curl -fsSL -o sfml.zip "https://www.sfml-dev.org/files/SFML-2.6.1-windows-gcc-13.1.0-mingw-64-bit.zip" || \
+		curl -fsSL -o sfml.zip "https://github.com/SFML/SFML/releases/download/2.6.1/SFML-2.6.1-windows-gcc-13.1.0-mingw-64-bit.zip"; \
+		unzip -q sfml.zip -d sfml-tmp; \
+		mv sfml-tmp/SFML-2.6.1 $(SFML_DIR); \
+		rm -rf sfml-tmp sfml.zip; \
+		echo "SFML下载完成"; \
+	fi
+
+clean:
+	rm -rf $(BUILD_DIR) $(TARGET)

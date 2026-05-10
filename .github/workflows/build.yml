@@ -19,32 +19,27 @@ jobs:
           echo "$mingwPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           g++ --version
 
-      - name: Setup EasyX
+      - name: Download SFML
         shell: bash
         run: |
-          curl -fsSL -o easyx.exe "https://docs.easyx.cn/releases/easyx_20240901.exe" || \
-          curl -fsSL -o easyx.exe "https://easyx.cn/releases/easyx_20240901.exe"
-          # 解压EasyX
-          7z x easyx.exe -oeasyx_raw -y || true
-          ls easyx_raw/ 2>/dev/null
-          # 复制头文件和库到MinGW
-          MINGW_DIR="/c/ProgramData/chocolatey/lib/mingw/tools/install/mingw64/mingw64"
-          cp easyx_raw/include/* "$MINGW_DIR/include/" 2>/dev/null || true
-          cp easyx_raw/lib64/* "$MINGW_DIR/lib/" 2>/dev/null || true
-          cp easyx_raw/lib64/* "$MINGW_DIR/x86_64-w64-mingw32/lib/" 2>/dev/null || true
-          echo "EasyX setup done"
+          curl -fsSL -o sfml.zip "https://github.com/SFML/SFML/releases/download/2.6.1/SFML-2.6.1-windows-gcc-13.1.0-mingw-64-bit.zip"
+          unzip -q sfml.zip
+          mv SFML-2.6.1 sfml-mingw
+          ls sfml-mingw/include/ 2>/dev/null
 
       - name: Build
         shell: bash
         run: |
-          mkdir -p build
+          mkdir -p build-win
+          SFML_INC="-Isfml-mingw/include"
+          SFML_LIB="-Lsfml-mingw/lib -lsfml-graphics -lsfml-window -lsfml-system -lsfml-audio -lwinmm -lopengl32 -lgdi32 -luser32"
           for f in src/*.cpp; do
-            obj="build/$(basename "$f" .cpp).o"
+            obj="build-win/$(basename "$f" .cpp).o"
             echo "Compiling $f ..."
-            g++ -std=c++17 -O2 -Wall -c -o "$obj" "$f" || exit 1
+            g++ -std=c++17 -O2 -Wall -DBEATPIXEL_USE_SFML $SFML_INC -c -o "$obj" "$f" || exit 1
           done
           echo "Linking..."
-          g++ -std=c++17 -O2 -o BeatPixel.exe build/*.o -leasyx -lmsimg32 -lwinmm -lgdi32 -luser32 || exit 1
+          g++ -std=c++17 -O2 -o BeatPixel.exe build-win/*.o $SFML_LIB || exit 1
           echo "Build success!"
 
       - name: Package
@@ -52,9 +47,12 @@ jobs:
         run: |
           mkdir -p dist
           cp BeatPixel.exe dist/
+          # 复制SFML DLL
+          cp sfml-mingw/bin/*.dll dist/ 2>/dev/null || true
           cp -r assets dist/ 2>/dev/null || true
           cp -r songs dist/ 2>/dev/null || true
           echo "双击 BeatPixel.exe 运行游戏" > dist/运行说明.txt
+          echo "需要保持所有文件在同一目录" >> dist/运行说明.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

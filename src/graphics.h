@@ -17,7 +17,7 @@
  */
 #pragma once
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(BEATPIXEL_USE_SFML)
 // Windows平台：使用EasyX原始头文件 + SFML兼容类型
 #include <easyx.h>
 #include <windows.h>
