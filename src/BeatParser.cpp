@@ -5,7 +5,11 @@
  *          基于能量峰值的节拍检测算法，自动分析音频生成谱面
  */
 #include "BeatParser.h"
+#ifdef _WIN32
+#include "graphics.h"
+#else
 #include <SFML/Audio.hpp>
+#endif
 #include <cmath>
 #include <algorithm>
 #include <numeric>

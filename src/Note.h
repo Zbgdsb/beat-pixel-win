@@ -7,7 +7,9 @@
  */
 #pragma once
 #include "graphics.h"
+#ifndef _WIN32
 #include <SFML/Graphics.hpp>
+#endif
 #include <cstdlib>
 
 // 判定结果枚举

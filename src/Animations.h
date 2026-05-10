@@ -5,7 +5,11 @@
  *          所有动画使用sf::Clock计时，easeOut缓动函数
  */
 #pragma once
+#ifdef _WIN32
+#include "graphics.h"
+#else
 #include <SFML/Graphics.hpp>
+#endif
 #include <cmath>
 
 // ========== easeOut缓动函数 ==========

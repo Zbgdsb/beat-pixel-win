@@ -78,6 +78,19 @@
 #include "GameWindow.h"
 #include <cstdio>
 
+// ========== 鼠标点击辅助函数 ==========
+
+bool GameWindow::isMouseClick() {
+    bool pressed = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
+    bool clicked = pressed && !mouseWasPressed;
+    mouseWasPressed = pressed;
+    return clicked;
+}
+
+bool GameWindow::isPointInRect(float px, float py, float rx, float ry, float rw, float rh) {
+    return px >= rx && px <= rx + rw && py >= ry && py <= ry + rh;
+}
+
 // ========== 菜单输入处理（V2.0新增） ==========
 
 void GameWindow::handleMenuInput() {
@@ -141,6 +154,58 @@ void GameWindow::handleMenuInput() {
     }
     keyMenuWasPressed = anyKey;
 
+    // 鼠标点击菜单项：第一次选中，第二次确认
+    if (isMouseClick()) {
+        sf::Vector2i mousePos = sf::Mouse::getPosition(*_easyx_impl::g_window);
+        float mx = (float)mousePos.x;
+        float my = (float)mousePos.y;
+        float menuX = (float)((width - 300) / 2);
+        int menuY = 190;
+        int itemH = 55;
+
+        for (int i = 0; i < 5; i++) {
+            float itemY = (float)(menuY + i * itemH);
+            if (isPointInRect(mx, my, menuX, itemY - 5.0f, 300.0f, 40.0f)) {
+                if (menuSelection == i) {
+                    // 已选中，再次点击才执行
+                    switch (menuSelection) {
+                        case 0:
+                            tracks.clear();
+                            scoreSystem.reset();
+                            initTracks();
+                            loadDemoSong();
+                            audioManager.generateSyncedBGM(noteTimeData);
+                            gameStartTime = GetTickCount64();
+                            currentTime = 0;
+                            gameState = PLAYING;
+                            prevCombo = 0;
+                            hitAnims.clear();
+                            textAnims.clear();
+                            audioManager.playBGM();
+                            break;
+                        case 1:
+                            importRequested = true;
+                            break;
+                        case 2:
+                            isInSettings = true;
+                            settingsMenuSelection = 0;
+                            break;
+                        case 3:
+                            difficultySelection = (difficultySelection + 1) % 3;
+                            currentDifficulty = (Difficulty)difficultySelection;
+                            break;
+                        case 4:
+                            isRunning = false;
+                            break;
+                    }
+                } else {
+                    menuSelection = i;
+                }
+                break;
+            }
+        }
+    }
+
     // 处理MP3导入请求
     if (importRequested) {
         importRequested = false;
@@ -150,13 +215,13 @@ void GameWindow::handleMenuInput() {
         // 在实际运行时，用户需要将MP3文件放在指定路径
         printf("\n========================================\n");
         printf("  请将MP3文件放到以下路径：\n");
-        printf("  /Users/Admin/Desktop/c++期末大作业/BeatPixel/songs/\n");
+        printf("  songs/\n");
         printf("  然后输入文件名（不含路径）：\n");
         printf("========================================\n");
         fflush(stdout);
 
         // 简化方案：自动扫描songs目录下的第一个MP3文件
-        std::string songsDir = "/Users/Admin/Desktop/c++期末大作业/BeatPixel/songs/";
+        std::string songsDir = "songs/";
         // 尝试使用system命令列出文件
         std::string cmd = "ls " + songsDir + "*.mp3 2>/dev/null | head -1";
         FILE* pipe = popen(cmd.c_str(), "r");
@@ -363,6 +428,65 @@ void GameWindow::handleResultInput() {
         }
     } else if (!enterPressed) {
         enterWasPressed = false;
+    }
+
+    // 鼠标点击结算菜单按钮：第一次选中，第二次确认
+    if (isMouseClick()) {
+        sf::Vector2i mousePos = sf::Mouse::getPosition(*_easyx_impl::g_window);
+        float mx = (float)mousePos.x;
+        float my = (float)mousePos.y;
+
+        float panelW = 600.0f, panelH = 580.0f;
+        float panelX = (width - panelW) / 2.0f;
+        float panelY = (height - panelH) / 2.0f;
+        float buttonW = 200.0f, buttonH = 40.0f;
+        float buttonY = panelY + panelH - 70.0f;
+        float buttonSpacing = 50.0f;
+        float startX = panelX + (panelW - buttonW * 2 - buttonSpacing) / 2;
+
+        for (int i = 0; i < 2; i++) {
+            float x = startX + i * (buttonW + buttonSpacing);
+            if (isPointInRect(mx, my, x, buttonY, buttonW, buttonH)) {
+                if (resultMenuSelection == i) {
+                    // 已选中，再次点击才执行
+                    dataManager.saveResult(currentSongName, (int)currentDifficulty,
+                                           scoreSystem.getTotalScore(), scoreSystem.getMaxCombo());
+                    if (i == 0) {
+                        scoreSystem.reset();
+                        tracks.clear();
+                        initTracks();
+                        if (parseResult.success && !parseResult.noteTimeData.empty()) {
+                            double speed = getDifficultySpeed();
+                            for (const auto& [timeMs, track] : parseResult.noteTimeData) {
+                                auto note = std::make_unique<NormalNote>(track, timeMs, JUDGE_Y, speed, TRACK_COLORS[track]);
+                                tracks[track]->addNote(std::move(note));
+                            }
+                            noteTimeData = parseResult.noteTimeData;
+                            lastNoteTime = parseResult.lastNoteTime;
+                        } else {
+                            loadDemoSong();
+                        }
+                        audioManager.generateSyncedBGM(noteTimeData);
+                        gameStartTime = GetTickCount64();
+                        currentTime = 0;
+                        lastJudgement = NONE;
+                        judgementDisplayTimer = 0;
+                        prevCombo = 0;
+                        hitAnims.clear();
+                        textAnims.clear();
+                        comboAnim.elapsed = comboAnim.duration;
+                        for (int j = 0; j < 4; j++) { keyPressed[j] = false; keyWasPressed[j] = false; keyGlowAlpha[j] = 0; }
+                        gameState = PLAYING;
+                        audioManager.playBGM();
+                    } else {
+                        gameState = MENU;
+                    }
+                } else {
+                    resultMenuSelection = i;
+                }
+                break;
+            }
+        }
     }
 }
 
@@ -666,6 +790,75 @@ void GameWindow::handlePauseInput() {
     } else if (!enterPressed) {
         enterWasPressed = false;
     }
+
+    // 鼠标点击暂停菜单按钮：第一次选中，第二次确认
+    if (isMouseClick()) {
+        sf::Vector2i mousePos = sf::Mouse::getPosition(*_easyx_impl::g_window);
+        float mx = (float)mousePos.x;
+        float my = (float)mousePos.y;
+
+        float panelW = 450.0f, panelH = 380.0f;
+        float panelX = (width - panelW) / 2.0f;
+        float panelY = (height - panelH) / 2.0f;
+        float buttonW = 300.0f, buttonH = 60.0f;
+        float buttonX = panelX + (panelW - buttonW) / 2.0f;
+        float buttonY = panelY + 100.0f;
+
+        for (int i = 0; i < 3; i++) {
+            float currentY = buttonY + i * (buttonH + 20.0f);
+            if (isPointInRect(mx, my, buttonX, currentY, buttonW, buttonH)) {
+                if (pauseMenuSelection == i) {
+                    // 已选中，再次点击才执行
+                    switch (i) {
+                        case 0: {
+                            long long pauseDuration = GetTickCount64() - pauseStartTime;
+                            gameStartTime += pauseDuration;
+                            audioManager.resumeBGM();
+                            gameState = PLAYING;
+                            break;
+                        }
+                        case 1: {
+                            audioManager.stopBGM();
+                            scoreSystem.reset();
+                            tracks.clear();
+                            initTracks();
+                            if (parseResult.success && !parseResult.noteTimeData.empty()) {
+                                double speed = getDifficultySpeed();
+                                for (const auto& [timeMs, track] : parseResult.noteTimeData) {
+                                    auto note = std::make_unique<NormalNote>(track, timeMs, JUDGE_Y, speed, TRACK_COLORS[track]);
+                                    tracks[track]->addNote(std::move(note));
+                                }
+                                noteTimeData = parseResult.noteTimeData;
+                                lastNoteTime = parseResult.lastNoteTime;
+                            } else {
+                                loadDemoSong();
+                            }
+                            audioManager.generateSyncedBGM(noteTimeData);
+                            gameStartTime = GetTickCount64();
+                            hitAnims.clear();
+                            textAnims.clear();
+                            particles.clear();
+                            missCrossAnims.clear();
+                            comboAnim.elapsed = 0.0f;
+                            pauseMenuSelection = 0;
+                            gameState = PLAYING;
+                            audioManager.playBGM();
+                            break;
+                        }
+                        case 2: {
+                            audioManager.stopBGM();
+                            pauseMenuSelection = 0;
+                            gameState = MENU;
+                            break;
+                        }
+                    }
+                } else {
+                    pauseMenuSelection = i;
+                }
+                break;
+            }
+        }
+    }
 }
 
 // ========== V3.1: 虚拟键码转显示名称 ==========
@@ -934,12 +1127,58 @@ void GameWindow::handleSettingsInput() {
     } else if (!escPressed) {
         escWasPressed = false;
     }
+
+    // 鼠标点击设置选项：第一次选中，第二次确认（音量条除外，直接调整）
+    if (currentKeySettingIndex < 0 && isMouseClick()) {
+        sf::Vector2i mousePos = sf::Mouse::getPosition(*_easyx_impl::g_window);
+        float mx = (float)mousePos.x;
+        float my = (float)mousePos.y;
+
+        float panelW = 500.0f, panelH = 500.0f;
+        float panelX = (width - panelW) / 2.0f;
+        float panelY = (height - panelH) / 2.0f;
+        float optionY = panelY + 90.0f;
+        float optionH = 45.0f;
+        float highlightW = 400.0f, highlightH = 35.0f;
+        float highlightX = panelX + (panelW - highlightW) / 2.0f;
+
+        for (int i = 0; i < 8; i++) {
+            float currentY = optionY + i * optionH - 5.0f;
+            if (isPointInRect(mx, my, highlightX, currentY, highlightW, highlightH)) {
+                if (i < 2) {
+                    // 音量选项：直接点击调整，不需要选中确认
+                    settingsMenuSelection = i;
+                    float midX = highlightX + highlightW / 2.0f;
+                    if (mx < midX) {
+                        if (i == 0) { musicVolume = std::max(0.0f, musicVolume - 0.1f); audioManager.setMusicVolume(musicVolume); }
+                        else { effectVolume = std::max(0.0f, effectVolume - 0.1f); audioManager.setEffectVolume(effectVolume); audioManager.playHit(false); }
+                    } else {
+                        if (i == 0) { musicVolume = std::min(1.0f, musicVolume + 0.1f); audioManager.setMusicVolume(musicVolume); }
+                        else { effectVolume = std::min(1.0f, effectVolume + 0.1f); audioManager.setEffectVolume(effectVolume); audioManager.playHit(false); }
+                    }
+                } else if (settingsMenuSelection == i) {
+                    // 已选中，再次点击才执行
+                    if (i >= 2 && i < 6) {
+                        currentKeySettingIndex = i - 2;
+                        keySettingWaitingRelease = false;
+                    } else if (i == 6) {
+                        customKeys[0] = 'A'; customKeys[1] = 'S'; customKeys[2] = 'D'; customKeys[3] = 'F';
+                    } else if (i == 7) {
+                        saveConfig(); isInSettings = false; settingsMenuSelection = 0;
+                    }
+                } else {
+                    settingsMenuSelection = i;
+                }
+                break;
+            }
+        }
+    }
 }
 
 // ========== V3.1: 配置保存和加载 ==========
 
 void GameWindow::saveConfig() {
-    FILE* fp = fopen("/Users/Admin/Desktop/c++期末大作业/BeatPixel/config.ini", "w");
+    FILE* fp = fopen("config.ini", "w");
     if (fp) {
         fprintf(fp, "[Settings]\n");
         fprintf(fp, "music_volume = %.2f\n", musicVolume);
@@ -954,7 +1193,7 @@ void GameWindow::saveConfig() {
 }
 
 void GameWindow::loadConfig() {
-    FILE* fp = fopen("/Users/Admin/Desktop/c++期末大作业/BeatPixel/config.ini", "r");
+    FILE* fp = fopen("config.ini", "r");
     if (fp) {
         char line[256];
         while (fgets(line, sizeof(line), fp)) {

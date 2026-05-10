@@ -5,7 +5,11 @@
  *          所有纹理在init()中一次性加载，运行时通过引用访问，避免重复IO
  */
 #pragma once
+#ifdef _WIN32
+#include "graphics.h"
+#else
 #include <SFML/Graphics.hpp>
+#endif
 #include <string>
 #include <cstdio>
 

@@ -210,7 +210,6 @@ bool GameWindow::init() {
     // 加载所有纹理资源
     bool texOk = textures.loadAll("assets/textures");
     if (!texOk) texOk = textures.loadAll("../assets/textures");
-    if (!texOk) texOk = textures.loadAll("/Users/Admin/Desktop/c++期末大作业/BeatPixel/assets/textures");
     if (!texOk) {
         printf("[GameWindow] 警告：纹理加载失败，使用后备渲染\n");
     } else {
@@ -219,7 +218,7 @@ bool GameWindow::init() {
     fflush(stdout);
 
     // 初始化数据管理器（排行榜）
-    dataManager.init("/Users/Admin/Desktop/c++期末大作业/BeatPixel/leaderboard.dat");
+    dataManager.init("leaderboard.dat");
 
     // 加载本地配置（音量等）
     loadConfig();

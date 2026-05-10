@@ -6,7 +6,11 @@
  *          音效复用Sound对象，避免重复创建导致卡顿
  */
 #pragma once
+#ifdef _WIN32
+#include "graphics.h"
+#else
 #include <SFML/Audio.hpp>
+#endif
 #include <cmath>
 #include <vector>
 #include <cstdint>

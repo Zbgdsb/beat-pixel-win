@@ -18,8 +18,200 @@
 #pragma once
 
 #ifdef _WIN32
-// Windows平台：直接使用EasyX原始头文件
+// Windows平台：使用EasyX原始头文件 + SFML兼容类型
 #include <easyx.h>
+#include <windows.h>
+#include <cmath>
+#include <cstdint>
+#include <chrono>
+#include <thread>
+#include <string>
+
+// ========== 路径辅助 ==========
+namespace _easyx_impl {
+    inline std::string getProjectRoot() {
+        const char* candidates[] = {".", "..", "../..", "../../.."};
+        for (auto& c : candidates) {
+            std::string test = std::string(c) + "/assets/textures";
+            DWORD attr = GetFileAttributesA(test.c_str());
+            if (attr != INVALID_FILE_ATTRIBUTES) return std::string(c);
+        }
+        return ".";
+    }
+    inline std::string basePath(const char* rel) {
+        static std::string root;
+        if (root.empty()) root = getProjectRoot();
+        return root + "/" + rel;
+    }
+    inline bool g_windowOpen = true;
+}
+
+// ========== SFML兼容类型（Windows EasyX版） ==========
+namespace sf {
+    struct Color {
+        uint8_t r, g, b, a;
+        Color() : r(255), g(255), b(255), a(255) {}
+        Color(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) : r(r), g(g), b(b), a(a) {}
+        static const Color White, Black, Red, Green, Blue, Yellow, Cyan, Magenta, Transparent;
+    };
+    inline const Color Color::White(255,255,255), Color::Black(0,0,0),
+        Color::Red(255,0,0), Color::Green(0,255,0), Color::Blue(0,0,255),
+        Color::Yellow(255,255,0), Color::Cyan(0,255,255), Color::Magenta(255,0,255),
+        Color::Transparent(0,0,0,0);
+
+    template<typename T>
+    struct Vector2 { T x, y; Vector2() : x(0), y(0) {} Vector2(T x, T y) : x(x), y(y) {} };
+    using Vector2f = Vector2<float>;
+    using Vector2i = Vector2<int>;
+    using Vector2u = Vector2<unsigned int>;
+
+    class RectangleShape {
+        Vector2f m_pos, m_size;
+        Color m_fill{0,0,0,0}, m_outline{0,0,0,0};
+        float m_outlineThick = 0;
+        float m_rotation = 0;
+        Vector2f m_scale{1,1};
+    public:
+        RectangleShape(Vector2f size) : m_size(size) {}
+        void setPosition(Vector2f p) { m_pos = p; }
+        void setFillColor(Color c) { m_fill = c; }
+        void setOutlineColor(Color c) { m_outline = c; }
+        void setOutlineThickness(float t) { m_outlineThick = t; }
+        void setRotation(float deg) { m_rotation = deg; }
+        void setScale(Vector2f s) { m_scale = s; }
+        void draw() const {
+            if (m_rotation != 0) return;
+            int x1 = (int)m_pos.x, y1 = (int)m_pos.y;
+            int x2 = x1 + (int)(m_size.x * m_scale.x), y2 = y1 + (int)(m_size.y * m_scale.y);
+            if (m_fill.a > 0) {
+                COLORREF fc = RGB(m_fill.r, m_fill.g, m_fill.b);
+                setfillcolor(fc);
+                setlinecolor(fc);
+                if (m_fill.a >= 255) solidrectangle(x1, y1, x2, y2);
+                else fillrectangle(x1, y1, x2, y2);
+            }
+            if (m_outlineThick > 0 && m_outline.a > 0) {
+                setlinecolor(RGB(m_outline.r, m_outline.g, m_outline.b));
+                rectangle(x1, y1, x2, y2);
+            }
+        }
+    };
+
+    class CircleShape {
+        Vector2f m_pos; float m_radius = 0; Color m_fill{0,0,0,0};
+    public:
+        CircleShape(float r) : m_radius(r) {}
+        void setPosition(Vector2f p) { m_pos = p; }
+        void setFillColor(Color c) { m_fill = c; }
+        void setOutlineColor(Color) {}
+        void setOutlineThickness(float) {}
+        void draw() const {
+            if (m_fill.a <= 0) return;
+            setfillcolor(RGB(m_fill.r, m_fill.g, m_fill.b));
+            solidcircle((int)(m_pos.x + m_radius), (int)(m_pos.y + m_radius), (int)m_radius);
+        }
+    };
+
+    class Texture {
+        int m_w = 0, m_h = 0;
+    public:
+        bool loadFromFile(const std::string&) { return false; }
+        void setSmooth(bool) {}
+        Vector2u getSize() const { return {(unsigned)m_w, (unsigned)m_h}; }
+    };
+
+    class Sprite {
+        Texture* m_tex = nullptr;
+        Vector2f m_pos, m_scale{1,1};
+        Color m_color{255,255,255,255};
+    public:
+        Sprite() = default;
+        Sprite(const Texture& t) : m_tex(const_cast<Texture*>(&t)) {}
+        void setTexture(const Texture& t, bool = false) { m_tex = const_cast<Texture*>(&t); }
+        void setPosition(Vector2f p) { m_pos = p; }
+        void setScale(Vector2f s) { m_scale = s; }
+        void setColor(Color c) { m_color = c; }
+        void draw() const {}
+    };
+
+    class Mouse {
+    public:
+        enum Button { Left = 0 };
+        static bool isButtonPressed(Button) { return (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0; }
+        static Vector2i getPosition(void*) {
+            POINT p; GetCursorPos(&p);
+            ScreenToClient(GetHWnd(), &p);
+            return {p.x, p.y};
+        }
+    };
+
+    inline float degrees(float deg) { return deg; }
+}
+
+// ========== 兼容g_window->draw(shape)用法 ==========
+namespace _easyx_impl {
+    struct DummyWindow {
+        template<typename T>
+        void draw(const T& shape) const { shape.draw(); }
+        void close() { g_windowOpen = false; }
+        void clear(sf::Color = {}) { cleardevice(); }
+        void display() {}
+        bool isOpen() const { return g_windowOpen; }
+    };
+    inline DummyWindow g_windowObj;
+    inline DummyWindow* g_window = &g_windowObj;
+}
+
+// ========== processWindowEvents ==========
+inline bool processWindowEvents() {
+    ExMessage msg;
+    while (peekmessage(&msg, EM_KEY, false)) {
+        if (msg.message == WM_KEYDOWN && msg.vkcode == VK_ESCAPE) {}
+    }
+    return _easyx_impl::g_windowOpen;
+}
+
+// ========== SFML音频兼容类型 ==========
+namespace sf {
+    enum class SoundChannel { Mono };
+    namespace SoundSource { enum Status { Stopped, Paused, Playing }; }
+
+    class SoundBuffer {
+        int m_samples = 0, m_rate = 0, m_channels = 0;
+    public:
+        bool loadFromSamples(const int16_t*, size_t count, int ch, int rate) {
+            m_samples = (int)count; m_channels = ch; m_rate = rate; return true;
+        }
+        int getSampleCount() const { return m_samples; }
+        unsigned int getSampleRate() const { return (unsigned)m_rate; }
+        unsigned int getChannelCount() const { return (unsigned)m_channels; }
+        std::vector<SoundChannel> getChannelMap() const { return {SoundChannel::Mono}; }
+    };
+
+    class Sound {
+        SoundSource::Status m_st = SoundSource::Stopped;
+    public:
+        Sound() = default;
+        Sound(const SoundBuffer&) {}
+        void play() { m_st = SoundSource::Playing; }
+        void pause() { m_st = SoundSource::Paused; }
+        void stop() { m_st = SoundSource::Stopped; }
+        void setPlayingOffset(int64_t) {}
+        void setVolume(float) {}
+        void setLooping(bool) {}
+        SoundSource::Status getStatus() const { return m_st; }
+    };
+
+    class InputSoundFile {
+    public:
+        bool openFromFile(const std::string&) { return true; }
+        size_t read(int16_t* d, size_t max) { if (d) memset(d, 0, max * sizeof(int16_t)); return max; }
+        int64_t getSampleCount() const { return 0; }
+        unsigned int getSampleRate() const { return 44100; }
+        unsigned int getChannelCount() const { return 1; }
+    };
+}
+
 #else
 // macOS/Linux平台：通过SFML实现EasyX兼容接口
 

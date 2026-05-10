@@ -34,6 +34,12 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(SFML_FLAGS)
 
+# GameWindow.cpp通过#include合并了这两个文件，需要追踪它们的修改时间
+GAMEWINDOW_DEPS = $(SRC_DIR)/GameWindow_input.cpp $(SRC_DIR)/GameWindow_render.cpp
+
+$(BUILD_DIR)/GameWindow.o: $(SRC_DIR)/GameWindow.cpp $(GAMEWINDOW_DEPS) | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 

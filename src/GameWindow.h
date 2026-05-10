@@ -122,6 +122,11 @@ private:
     bool escKeyReleased = true;          // ESC键防重复触发
     int resultMenuSelection = 0;         // 结算菜单选择索引 0:重新开始 1:返回菜单
 
+    // ========== 鼠标点击支持 ==========
+    bool mouseWasPressed = false;        // 鼠标左键上一帧状态（防重复触发）
+    bool isMouseClick();                 // 检测鼠标单击（按下瞬间返回true）
+    bool isPointInRect(float px, float py, float rx, float ry, float rw, float rh); // 点是否在矩形内
+
     // ========== V3.1: 音量调节 ==========
     float musicVolume = 1.0f;            // 背景音乐音量 0.0~1.0
     float effectVolume = 1.0f;           // 音效音量 0.0~1.0
