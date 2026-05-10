@@ -10,7 +10,6 @@
 static const int SAMPLE_RATE = 44100;
 static const float BGM_VOLUME = 0.20f;
 static const float SFX_VOLUME = 0.5f;
-static const std::vector<sf::SoundChannel> MONO_MAP = {sf::SoundChannel::Mono};
 
 // 轨道对应音高（C大调和弦音，每个轨道不同音高增加层次感）
 static const float TRACK_PITCHES[4] = {
@@ -24,7 +23,7 @@ AudioManager::AudioManager() : bgmLoaded(false), sfxLoaded(false) {
 }
 
 bool AudioManager::loadBuffer(sf::SoundBuffer& buffer, const std::vector<int16_t>& data) {
-    return buffer.loadFromSamples(data.data(), data.size(), 1, SAMPLE_RATE, MONO_MAP);
+    return buffer.loadFromSamples(data.data(), data.size(), 1, SAMPLE_RATE);
 }
 
 std::vector<int16_t> AudioManager::generateTone(float freq, float duration,

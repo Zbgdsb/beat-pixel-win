@@ -6,7 +6,11 @@
  */
 #include "BeatParser.h"
 #ifdef _WIN32
+#ifndef BEATPIXEL_USE_SFML
 #include "graphics.h"
+#else
+#include "AudioManager.h"
+#endif
 #else
 #include <SFML/Audio.hpp>
 #endif

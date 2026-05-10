@@ -7,7 +7,44 @@
  */
 #pragma once
 #ifdef _WIN32
+#ifndef BEATPIXEL_USE_SFML
 #include "graphics.h"
+#else
+// SFML编译时：提供Audio stub，跳过音频
+#include <cstdint>
+#include <vector>
+#include <memory>
+#include <string>
+namespace sf {
+    class SoundBuffer {
+    public:
+        bool loadFromSamples(const int16_t*, size_t, int, int) { return true; }
+        int getSampleCount() const { return 0; }
+        unsigned int getSampleRate() const { return 44100; }
+        unsigned int getChannelCount() const { return 1; }
+    };
+    class Sound {
+    public:
+        Sound() = default;
+        Sound(const SoundBuffer&) {}
+        void play() {}
+        void pause() {}
+        void stop() {}
+        void setPlayingOffset(int64_t) {}
+        void setVolume(float) {}
+        void setLooping(bool) {}
+        int getStatus() const { return 0; }
+    };
+    class InputSoundFile {
+    public:
+        bool openFromFile(const std::string&) { return true; }
+        size_t read(int16_t* d, size_t max) { if(d) memset(d,0,max*sizeof(int16_t)); return max; }
+        int64_t getSampleCount() const { return 0; }
+        unsigned int getSampleRate() const { return 44100; }
+        unsigned int getChannelCount() const { return 1; }
+    };
+}
+#endif
 #else
 #include <SFML/Audio.hpp>
 #endif
