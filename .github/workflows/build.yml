@@ -12,27 +12,27 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup MinGW
-        uses: egor-tensin/setup-mingw@v2
-        with:
-          platform: x64
+        shell: pwsh
+        run: |
+          choco install mingw -y --no-progress
+          $mingwPath = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\mingw64\bin"
+          echo "$mingwPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          g++ --version
 
       - name: Setup EasyX
         shell: bash
         run: |
-          # 下载EasyX (尝试多个来源)
-          curl -fsSL -o easyx_setup.exe "https://docs.easyx.cn/releases/easyx_20240901.exe" || \
-          curl -fsSL -o easyx_setup.exe "https://easyx.cn/releases/easyx_20240901.exe"
-          # 用7z解压
-          "/c/Program Files/7-Zip/7z.exe" x easyx_setup.exe -oeasyx_raw -y || true
-          # 复制文件到MinGW
-          if [ -d "easyx_raw/include" ]; then
-            cp easyx_raw/include/* /c/msys64/mingw64/include/ 2>/dev/null || \
-            cp easyx_raw/include/* "$MINGW_PREFIX/include/" 2>/dev/null || true
-          fi
-          if [ -d "easyx_raw/lib64" ]; then
-            cp easyx_raw/lib64/* /c/msys64/mingw64/lib/ 2>/dev/null || \
-            cp easyx_raw/lib64/* "$MINGW_PREFIX/lib/" 2>/dev/null || true
-          fi
+          curl -fsSL -o easyx.exe "https://docs.easyx.cn/releases/easyx_20240901.exe" || \
+          curl -fsSL -o easyx.exe "https://easyx.cn/releases/easyx_20240901.exe"
+          # 解压EasyX
+          7z x easyx.exe -oeasyx_raw -y || true
+          ls easyx_raw/ 2>/dev/null
+          # 复制头文件和库到MinGW
+          MINGW_DIR="/c/ProgramData/chocolatey/lib/mingw/tools/install/mingw64/mingw64"
+          cp easyx_raw/include/* "$MINGW_DIR/include/" 2>/dev/null || true
+          cp easyx_raw/lib64/* "$MINGW_DIR/lib/" 2>/dev/null || true
+          cp easyx_raw/lib64/* "$MINGW_DIR/x86_64-w64-mingw32/lib/" 2>/dev/null || true
+          echo "EasyX setup done"
 
       - name: Build
         shell: bash
@@ -55,7 +55,6 @@ jobs:
           cp -r assets dist/ 2>/dev/null || true
           cp -r songs dist/ 2>/dev/null || true
           echo "双击 BeatPixel.exe 运行游戏" > dist/运行说明.txt
-          echo "需要在 BeatPixel 文件夹下运行" >> dist/运行说明.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
