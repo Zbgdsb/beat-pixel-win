@@ -1800,43 +1800,18 @@ void GameWindow::handleSongListInput() {
             textAnims.clear();
             audioManager.playBGM();
         } else {
-            // 分析并加载歌曲
+            // MP3文件：直接进入分析流程
             analysisFilePath = selected.filePath;
-            tracks.clear();
-            scoreSystem.reset();
-            initTracks();
-            parseResult = beatParser.parse(selected.filePath);
-            if (parseResult.success && !parseResult.noteTimeData.empty()) {
-                double speed = getDifficultySpeed();
-                for (const auto& [timeMs, track] : parseResult.noteTimeData) {
-                    auto note = std::make_unique<NormalNote>(track, timeMs, JUDGE_Y, speed, TRACK_COLORS[track]);
-                    tracks[track]->addNote(std::move(note));
-                }
-                noteTimeData = parseResult.noteTimeData;
-                lastNoteTime = parseResult.lastNoteTime;
-                currentSongName = selected.name;
-                audioManager.generateSyncedBGM(noteTimeData);
-                gameStartTime = GetTickCount64();
-                currentTime = 0;
-                gameState = PLAYING;
-                prevCombo = 0;
-                hitAnims.clear();
-                textAnims.clear();
-                audioManager.playBGM();
+            currentSongName = selected.name;
+            SongAnalyzer analyzer;
+            analysisResult = analyzer.analyze(selected.filePath);
+            if (analysisResult.success) {
+                manualBPM = analysisResult.bpm;
+                manualOffset = 0;
+                analysisDone = true;
+                gameState = ANALYZING;
             } else {
-                // 解析失败，尝试用ffmpeg+aubio分析
-                SongAnalyzer analyzer;
-                analysisResult = analyzer.analyze(selected.filePath);
-                if (analysisResult.success) {
-                    analysisFilePath = selected.filePath;
-                    currentSongName = analysisResult.metadata.title;
-                    manualBPM = analysisResult.bpm;
-                    manualOffset = 0;
-                    analysisDone = true;
-                    gameState = ANALYZING;
-                } else {
-                    printf("[GameWindow] 无法解析: %s\n", selected.filePath.c_str());
-                }
+                printf("[GameWindow] 无法解析: %s\n", selected.filePath.c_str());
             }
         }
     }
