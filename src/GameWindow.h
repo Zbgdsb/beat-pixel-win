@@ -124,6 +124,17 @@ private:
     bool chartExportRequested = false; // V3.3: 导出谱面
     bool showAchievements = false;  // V3.3: 显示成就界面
 
+    // ========== V3.4: 歌曲列表 ==========
+    struct SongListItem {
+        std::string name;           // 歌曲名（文件名去掉后缀）
+        std::string filePath;       // 完整文件路径
+        bool hasChart;              // 是否已有谱面
+    };
+    std::vector<SongListItem> songList;
+    int songListSelection = 0;     // 列表选中索引
+    bool isShowingSongList = false; // 是否在歌曲列表界面
+    void refreshSongList();         // 扫描songs目录生成列表
+
     GameState gameState;
     long long gameStartTime;
     long long currentTime;
@@ -222,6 +233,8 @@ private:
     void drawAnalysisScreen();   // V3.2: 分析界面绘制
     void drawAchievementsScreen(); // V3.3: 成就界面
     void handleAchievementsInput(); // V3.3: 成就界面输入
+    void drawSongListScreen();     // V3.4: 歌曲列表界面
+    void handleSongListInput();    // V3.4: 歌曲列表输入
     void drawAchievementPopups(); // V3.3: 成就弹窗绘制
     void updateAchievementPopups(float dt);
     std::string getFileNameWithoutExt(const std::string& filePath);

@@ -253,6 +253,9 @@ bool GameWindow::init() {
     // 加载本地配置（音量等）
     loadConfig(configPath);
 
+    // V3.4: 扫描歌曲列表
+    refreshSongList();
+
     audioManager.init();
     // 设置初始音量
     audioManager.setMusicVolume(musicVolume);

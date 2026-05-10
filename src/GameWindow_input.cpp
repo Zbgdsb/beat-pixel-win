@@ -131,19 +131,10 @@ void GameWindow::handleMenuInput() {
         }
         if (enterPressed) {
             switch (menuSelection) {
-                case 0: // 开始游戏 - Demo歌曲
-                    tracks.clear();
-                    scoreSystem.reset();
-                    initTracks();
-                    loadDemoSong();
-                    audioManager.generateSyncedBGM(noteTimeData);
-                    gameStartTime = GetTickCount64();
-                    currentTime = 0;
-                    gameState = PLAYING;
-                    prevCombo = 0;
-                    hitAnims.clear();
-                    textAnims.clear();
-                    audioManager.playBGM();
+                case 0: // 歌曲列表
+                    refreshSongList();
+                    isShowingSongList = true;
+                    songListSelection = 0;
                     break;
 
                 case 1: // 导入MP3
@@ -1682,6 +1673,195 @@ void GameWindow::handleAchievementsInput() {
         if (isPointInRect(mx, my, btnX, btnY, 200.0f, 40.0f)) {
             showAchievements = false;
             gameState = MENU;
+        }
+    }
+}
+
+// ========== V3.4: 歌曲列表 ==========
+void GameWindow::refreshSongList() {
+    songList.clear();
+    std::string songsDir = exeDir + "/songs/";
+
+    // 扫描目录
+    std::string cmd = "ls '" + songsDir + "' 2>/dev/null";
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) return;
+
+    char buffer[512];
+    while (fgets(buffer, sizeof(buffer), pipe)) {
+        std::string filename = buffer;
+        // 去掉换行符
+        while (!filename.empty() && (filename.back() == '\n' || filename.back() == '\r')) {
+            filename.pop_back();
+        }
+        if (filename.empty()) continue;
+
+        // 只要.mp3文件
+        if (filename.size() > 4 && filename.substr(filename.size() - 4) == ".mp3") {
+            std::string name = filename.substr(0, filename.size() - 4);
+            std::string path = songsDir + filename;
+            // 检查是否已有谱面
+            bool hasChart = false;
+            std::string chartPath = path + ".chart.json";
+            FILE* f = fopen(chartPath.c_str(), "r");
+            if (f) { fclose(f); hasChart = true; }
+            songList.push_back({name, path, hasChart});
+        }
+    }
+    pclose(pipe);
+
+    // 扫描.beatpixel文件
+    cmd = "ls '" + songsDir + "'*.beatpixel 2>/dev/null";
+    pipe = popen(cmd.c_str(), "r");
+    if (pipe) {
+        while (fgets(buffer, sizeof(buffer), pipe)) {
+            std::string filepath = buffer;
+            while (!filepath.empty() && (filepath.back() == '\n' || filepath.back() == '\r')) {
+                filepath.pop_back();
+            }
+            if (filepath.empty()) continue;
+
+            size_t lastSlash = filepath.find_last_of('/');
+            std::string filename = (lastSlash != std::string::npos) ? filepath.substr(lastSlash + 1) : filepath;
+            std::string name = filename.substr(0, filename.size() - 10); // 去掉.beatpixel
+            songList.push_back({name, filepath, true});
+        }
+        pclose(pipe);
+    }
+
+    // 加一个Demo歌曲
+    songList.insert(songList.begin(), {"[Demo] TESO", "", false});
+
+    printf("[GameWindow] 歌曲列表: %zu首\n", songList.size());
+    fflush(stdout);
+}
+
+void GameWindow::handleSongListInput() {
+    // 只处理窗口关闭
+    {
+        using namespace _easyx_impl;
+        if (g_window && g_windowOpen) {
+            while (const auto event = g_window->pollEvent()) {
+                if (event->is<sf::Event::Closed>()) {
+                    g_windowOpen = false;
+                    isRunning = false;
+                    return;
+                }
+            }
+        }
+    }
+
+    bool escPressed = (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
+    bool upPressed = (GetAsyncKeyState('W') & 0x8000) != 0;
+    bool downPressed = (GetAsyncKeyState('S') & 0x8000) != 0;
+    bool enterPressed = (GetAsyncKeyState(VK_RETURN) & 0x8000) != 0;
+
+    static bool prevEsc = false, prevUp = false, prevDown = false, prevEnter = false;
+    bool escJust = escPressed && !prevEsc;
+    bool upJust = upPressed && !prevUp;
+    bool downJust = downPressed && !prevDown;
+    bool enterJust = enterPressed && !prevEnter;
+    prevEsc = escPressed; prevUp = upPressed; prevDown = downPressed; prevEnter = enterPressed;
+
+    if (escJust) {
+        isShowingSongList = false;
+        gameState = MENU;
+        return;
+    }
+
+    int maxIdx = (int)songList.size() - 1;
+    if (maxIdx < 0) maxIdx = 0;
+
+    if (upJust) {
+        songListSelection--;
+        if (songListSelection < 0) songListSelection = maxIdx;
+    }
+    if (downJust) {
+        songListSelection++;
+        if (songListSelection > maxIdx) songListSelection = 0;
+    }
+
+    if (enterJust && !songList.empty()) {
+        auto& selected = songList[songListSelection];
+        isShowingSongList = false;
+
+        if (selected.name == "[Demo] TESO") {
+            // Demo歌曲
+            tracks.clear();
+            scoreSystem.reset();
+            initTracks();
+            loadDemoSong();
+            audioManager.generateSyncedBGM(noteTimeData);
+            gameStartTime = GetTickCount64();
+            currentTime = 0;
+            gameState = PLAYING;
+            prevCombo = 0;
+            hitAnims.clear();
+            textAnims.clear();
+            audioManager.playBGM();
+        } else {
+            // 分析并加载歌曲
+            analysisFilePath = selected.filePath;
+            tracks.clear();
+            scoreSystem.reset();
+            initTracks();
+            parseResult = beatParser.parse(selected.filePath);
+            if (parseResult.success && !parseResult.noteTimeData.empty()) {
+                double speed = getDifficultySpeed();
+                for (const auto& [timeMs, track] : parseResult.noteTimeData) {
+                    auto note = std::make_unique<NormalNote>(track, timeMs, JUDGE_Y, speed, TRACK_COLORS[track]);
+                    tracks[track]->addNote(std::move(note));
+                }
+                noteTimeData = parseResult.noteTimeData;
+                lastNoteTime = parseResult.lastNoteTime;
+                currentSongName = selected.name;
+                audioManager.generateSyncedBGM(noteTimeData);
+                gameStartTime = GetTickCount64();
+                currentTime = 0;
+                gameState = PLAYING;
+                prevCombo = 0;
+                hitAnims.clear();
+                textAnims.clear();
+                audioManager.playBGM();
+            } else {
+                // 解析失败，尝试用ffmpeg+aubio分析
+                SongAnalyzer analyzer;
+                analysisResult = analyzer.analyze(selected.filePath);
+                if (analysisResult.success) {
+                    analysisFilePath = selected.filePath;
+                    currentSongName = analysisResult.metadata.title;
+                    manualBPM = analysisResult.bpm;
+                    manualOffset = 0;
+                    analysisDone = true;
+                    gameState = ANALYZING;
+                } else {
+                    printf("[GameWindow] 无法解析: %s\n", selected.filePath.c_str());
+                }
+            }
+        }
+    }
+
+    // 鼠标点击歌曲列表
+    if (isMouseClick()) {
+        sf::Vector2i mp = sf::Mouse::getPosition(*_easyx_impl::g_window);
+        float mx = (float)mp.x, my = (float)mp.y;
+        float panelW = 500.0f, panelH = 400.0f;
+        float panelX = (width - panelW) / 2.0f;
+        float panelY = (height - panelH) / 2.0f;
+        float itemH = 36.0f;
+        float startY = panelY + 60;
+
+        for (int i = 0; i < (int)songList.size(); i++) {
+            float itemY = startY + i * itemH;
+            if (isPointInRect(mx, my, panelX + 20, itemY, panelW - 40, itemH)) {
+                if (songListSelection == i) {
+                    // 双击确认 → 触发enter逻辑
+                    enterJust = true;
+                } else {
+                    songListSelection = i;
+                }
+                break;
+            }
         }
     }
 }

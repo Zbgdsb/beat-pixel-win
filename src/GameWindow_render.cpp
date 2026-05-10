@@ -58,7 +58,7 @@ void GameWindow::drawMenuScreen() {
 
     // 菜单选项
     const char* menuItems[] = {
-        "Start Game (Demo)",
+        "Song List",
         "Import MP3",
         "Import Chart",
         "Achievements",
@@ -188,6 +188,8 @@ void GameWindow::render() {
             drawSettingsScreen();
         } else if (showAchievements) {
             drawAchievementsScreen();
+        } else if (isShowingSongList) {
+            drawSongListScreen();
         } else {
             drawMenuScreen();
         }
@@ -1622,6 +1624,105 @@ void GameWindow::drawAchievementsScreen() {
     outtextxy((int)(panelX + (panelW - textwidth("ESC/ENTER: Return")) / 2), (int)(panelY + panelH - 20), "ESC/ENTER: Return");
 }
 
+// ========== V3.4: 歌曲列表界面 ==========
+void GameWindow::drawSongListScreen() {
+    using namespace _easyx_impl;
+    if (!g_window || !g_windowOpen) return;
+
+    // 背景
+    sf::RectangleShape mask({(float)width, (float)height});
+    mask.setPosition({0, 0});
+    mask.setFillColor(sf::Color(0, 0, 0, 220));
+    g_window->draw(mask);
+
+    float panelW = 500.0f, panelH = 400.0f;
+    float panelX = (width - panelW) / 2.0f;
+    float panelY = (height - panelH) / 2.0f;
+
+    sf::RectangleShape panel({panelW, panelH});
+    panel.setPosition({panelX, panelY});
+    panel.setFillColor(sf::Color(20, 20, 30, 240));
+    panel.setOutlineColor(sf::Color(0, 200, 200, 150));
+    panel.setOutlineThickness(2.0f);
+    g_window->draw(panel);
+
+    // 标题
+    settextcolor(RGB(0, 255, 200));
+    settextstyle(28, 0, "Consolas");
+    const char* title = "Song List";
+    int titleW = textwidth(title);
+    outtextxy((int)(panelX + (panelW - titleW) / 2), (int)(panelY + 15), title);
+
+    // 数量提示
+    settextcolor(RGB(120, 120, 150));
+    settextstyle(12, 0, "Consolas");
+    char countStr[64];
+    snprintf(countStr, sizeof(countStr), "%zu songs", songList.size());
+    int countW = textwidth(countStr);
+    outtextxy((int)(panelX + (panelW - countW) / 2), (int)(panelY + 45), countStr);
+
+    // 歌曲列表
+    float itemH = 36.0f;
+    float startY = panelY + 60;
+    int maxVisible = (int)((panelH - 120) / itemH);
+    int scrollOffset = 0;
+    if (songListSelection >= maxVisible) {
+        scrollOffset = songListSelection - maxVisible + 1;
+    }
+
+    for (int i = 0; i < maxVisible && (i + scrollOffset) < (int)songList.size(); i++) {
+        int idx = i + scrollOffset;
+        float y = startY + i * itemH;
+
+        bool isSelected = (idx == songListSelection);
+
+        // 背景条
+        sf::RectangleShape row({panelW - 40, itemH - 2});
+        row.setPosition({panelX + 20, y});
+        if (isSelected) {
+            row.setFillColor(sf::Color(0, 60, 60, 200));
+            row.setOutlineColor(sf::Color(0, 220, 220, 150));
+        } else {
+            row.setFillColor(sf::Color(30, 30, 40, 100));
+            row.setOutlineColor(sf::Color(60, 60, 80, 50));
+        }
+        row.setOutlineThickness(1.0f);
+        g_window->draw(row);
+
+        // 歌曲名
+        if (isSelected) {
+            settextcolor(RGB(0, 255, 200));
+            settextstyle(16, 0, "Consolas");
+        } else {
+            settextcolor(RGB(180, 180, 200));
+            settextstyle(15, 0, "Consolas");
+        }
+        outtextxy((int)(panelX + 35), (int)(y + 8), songList[idx].name.c_str());
+
+        // 谱面状态
+        if (songList[idx].hasChart) {
+            settextcolor(RGB(100, 200, 100));
+        } else {
+            settextcolor(RGB(80, 80, 100));
+        }
+        settextstyle(12, 0, "Consolas");
+        const char* status = songList[idx].hasChart ? "[Chart]" : "[No Chart]";
+        outtextxy((int)(panelX + panelW - 90), (int)(y + 12), status);
+    }
+
+    // 滚动提示
+    if ((int)songList.size() > maxVisible) {
+        settextcolor(RGB(80, 80, 100));
+        settextstyle(11, 0, "Consolas");
+        outtextxy((int)(panelX + (panelW - textwidth("W/S to scroll")) / 2), (int)(panelY + panelH - 35), "W/S to scroll");
+    }
+
+    // 返回提示
+    settextcolor(RGB(100, 100, 120));
+    settextstyle(12, 0, "Consolas");
+    outtextxy((int)(panelX + (panelW - textwidth("ESC: Return  |  ENTER: Play")) / 2), (int)(panelY + panelH - 18), "ESC: Return  |  ENTER: Play");
+}
+
 // ========== 主循环 ==========
 
 void GameWindow::run() {
@@ -1635,6 +1736,8 @@ void GameWindow::run() {
                 handleSettingsInput();
             } else if (showAchievements) {
                 handleAchievementsInput();
+            } else if (isShowingSongList) {
+                handleSongListInput();
             } else {
                 handleMenuInput();
             }
