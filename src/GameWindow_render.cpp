@@ -60,18 +60,20 @@ void GameWindow::drawMenuScreen() {
     const char* menuItems[] = {
         "Start Game (Demo)",
         "Import MP3",
+        "Import Chart",
+        "Achievements",
         "Settings",
         "Difficulty: Normal",
         "Exit"
     };
     char diffStr[64];
     snprintf(diffStr, sizeof(diffStr), "Difficulty: %s", getDifficultyName());
-    menuItems[3] = diffStr;
+    menuItems[5] = diffStr;
 
-    int menuY = 190;
-    int itemH = 55;
+    int menuY = 170;
+    int itemH = 48;
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 7; i++) {
         int y = menuY + i * itemH;
 
         if (i == menuSelection) {
@@ -98,7 +100,7 @@ void GameWindow::drawMenuScreen() {
         outtextxy((width - itemW) / 2 + 15, y + 3, menuItems[i]);
     }
 
-    // 排行榜预览
+    // 排行榜预览（放在菜单下方）
     int highScore = dataManager.getHighScore("Demo Song", (int)currentDifficulty);
     if (highScore > 0) {
         settextcolor(RGB(255, 215, 0));
@@ -106,7 +108,7 @@ void GameWindow::drawMenuScreen() {
         char lbStr[128];
         snprintf(lbStr, sizeof(lbStr), "Demo Song Best: %d", highScore);
         int lbW = textwidth(lbStr);
-        outtextxy((width - lbW) / 2, 420, lbStr);
+        outtextxy((width - lbW) / 2, 530, lbStr);
     }
 
     // 底部提示
@@ -170,7 +172,7 @@ void GameWindow::drawDynamicBackground() {
 
         sf::RectangleShape band({(float)width, (float)(y2 - y1)});
         band.setPosition({0.0f, (float)y1});
-        band.setFillColor(sf::Color(r, g, b));
+        band.setFillColor(sf::Color(r, g, b, 180)); // 半透明，露出背景图
         g_window->draw(band);
     }
 }
@@ -184,9 +186,14 @@ void GameWindow::render() {
         cleardevice();
         if (isInSettings) {
             drawSettingsScreen();
+        } else if (showAchievements) {
+            drawAchievementsScreen();
         } else {
             drawMenuScreen();
         }
+    } else if (gameState == ANALYZING) {
+        cleardevice();
+        drawAnalysisScreen();
     } else if (gameState == PLAYING) {
         // 游戏背景图（cover模式，不变形铺满）
         {
@@ -242,6 +249,10 @@ void GameWindow::render() {
         cleardevice();
         drawResultScreen();
     }
+
+    // V3.3: 成就弹窗覆盖层（所有界面都显示）
+    updateAchievementPopups(1.0f / 60.0f);
+    drawAchievementPopups();
 
     FlushBatchDraw();
 }
@@ -509,14 +520,14 @@ void GameWindow::drawParticles() {
         sf::RectangleShape line1({size * 2.0f, thickness});
         line1.setOrigin({size, thickness / 2.0f});
         line1.setPosition({cross.x, cross.y});
-        line1.setRotation(45.0f);
+        line1.setRotation(sf::degrees(45.0f));
         line1.setFillColor(sf::Color(255, 60, 60, alpha));
         g_window->draw(line1);
 
         sf::RectangleShape line2({size * 2.0f, thickness});
         line2.setOrigin({size, thickness / 2.0f});
         line2.setPosition({cross.x, cross.y});
-        line2.setRotation(-45.0f);
+        line2.setRotation(sf::degrees(-45.0f));
         line2.setFillColor(sf::Color(255, 60, 60, alpha));
         g_window->draw(line2);
     }
@@ -1163,6 +1174,443 @@ void GameWindow::drawSettingsScreen() {
     }
 }
 
+// ========== V3.2: 歌曲分析界面绘制 ==========
+void GameWindow::drawAnalysisScreen() {
+    using namespace _easyx_impl;
+    if (!g_window || !g_windowOpen) return;
+
+    // 渐变背景
+    const int bands = 16;
+    for (int i = 0; i < bands; i++) {
+        float t = (float)i / bands;
+        int r = (int)(5 + 10 * t);
+        int g = (int)(5 + 5 * t);
+        int b = (int)(15 + 12 * t);
+        int y1 = (int)(height * t);
+        int y2 = (int)(height * (t + 1.0f / bands));
+        sf::RectangleShape band({(float)width, (float)(y2 - y1)});
+        band.setPosition({0.0f, (float)y1});
+        band.setFillColor(sf::Color(r, g, b));
+        g_window->draw(band);
+    }
+
+    // 主面板
+    float panelW = 700.0f;
+    float panelH = 550.0f;
+    float panelX = (width - panelW) / 2.0f;
+    float panelY = (height - panelH) / 2.0f;
+
+    sf::RectangleShape panel({panelW, panelH});
+    panel.setPosition({panelX, panelY});
+    panel.setFillColor(sf::Color(15, 15, 25, 240));
+    panel.setOutlineColor(sf::Color(100, 200, 255, 150));
+    panel.setOutlineThickness(2.0f);
+    g_window->draw(panel);
+
+    // 标题
+    settextcolor(RGB(100, 200, 255));
+    settextstyle(36, 0, "Consolas");
+    const char* title = "歌曲分析"; // 歌曲分析
+    int titleW = textwidth(title);
+    outtextxy((int)(panelX + (panelW - titleW) / 2), (int)(panelY + 15), title);
+
+    if (!analysisDone) {
+        // 分析中提示
+        settextcolor(RGB(200, 200, 200));
+        settextstyle(24, 0, "Consolas");
+        const char* loading = "正在分析，请稍候..."; // 正在分析，请稍候...
+        int loadingW = textwidth(loading);
+        outtextxy((int)(panelX + (panelW - loadingW) / 2), (int)(panelY + panelH / 2), loading);
+        return;
+    }
+
+    float contentX = panelX + 30;
+    float contentY = panelY + 65;
+
+    // ===== 歌曲信息 =====
+    settextcolor(RGB(0, 255, 200));
+    settextstyle(14, 0, "Consolas");
+    outtextxy((int)contentX, (int)contentY, "[歌曲信息]"); // [歌曲信息]
+    contentY += 22;
+
+    settextcolor(RGB(220, 220, 220));
+    settextstyle(16, 0, "Consolas");
+    char infoStr[256];
+
+    snprintf(infoStr, sizeof(infoStr), "歌名: %s", analysisResult.metadata.title.c_str()); // 歌名
+    outtextxy((int)contentX, (int)contentY, infoStr);
+    contentY += 22;
+
+    snprintf(infoStr, sizeof(infoStr), "歌手: %s", analysisResult.metadata.artist.empty() ? "未知" : analysisResult.metadata.artist.c_str()); // 歌手: 未知
+    outtextxy((int)contentX, (int)contentY, infoStr);
+    contentY += 22;
+
+    int durMin = (int)(analysisResult.metadata.duration) / 60;
+    int durSec = (int)(analysisResult.metadata.duration) % 60;
+    snprintf(infoStr, sizeof(infoStr), "时长: %02d:%02d", durMin, durSec); // 时长
+    outtextxy((int)contentX, (int)contentY, infoStr);
+    contentY += 35;
+
+    // ===== BPM分析 =====
+    settextcolor(RGB(0, 255, 200));
+    settextstyle(14, 0, "Consolas");
+    outtextxy((int)contentX, (int)contentY, "[节奏分析]"); // [节奏分析]
+    contentY += 22;
+
+    // 置信度颜色
+    COLORREF confColor;
+    if (analysisResult.bpmConfidence >= 90) confColor = RGB(100, 255, 100);
+    else if (analysisResult.bpmConfidence >= 70) confColor = RGB(255, 200, 100);
+    else confColor = RGB(255, 100, 100);
+
+    settextcolor(RGB(255, 255, 255));
+    settextstyle(20, 0, "Consolas");
+    char bpmStr[64];
+    snprintf(bpmStr, sizeof(bpmStr), "BPM: %.1f  (置信度: %.1f%%)", manualBPM, analysisResult.bpmConfidence); // 置信度
+    outtextxy((int)contentX, (int)contentY, bpmStr);
+
+    // 置信度进度条
+    float barX = contentX + 350;
+    float barY = contentY + 3;
+    float barW = 200.0f, barH = 16.0f;
+    sf::RectangleShape confBg({barW, barH});
+    confBg.setPosition({barX, barY});
+    confBg.setFillColor(sf::Color(40, 40, 50));
+    g_window->draw(confBg);
+    sf::RectangleShape confFill({barW * (analysisResult.bpmConfidence / 100.0f), barH});
+    confFill.setPosition({barX, barY});
+    confFill.setFillColor(sf::Color(
+        (confColor >> 16) & 0xFF, (confColor >> 8) & 0xFF, confColor & 0xFF, 200));
+    g_window->draw(confFill);
+
+    if (analysisResult.bpmConfidence < 90) {
+        settextcolor(RGB(255, 150, 50));
+        settextstyle(12, 0, "Consolas");
+        outtextxy((int)contentX, (int)(contentY + 25), "[!] 置信度偏低，请用 A/D 调整或 T 键点拍校准"); // 置信度偏低，请用 A/D 调整或 T 键点拍校准
+    }
+    contentY += 50;
+
+    // ===== 偏移 =====
+    settextcolor(RGB(0, 255, 200));
+    settextstyle(14, 0, "Consolas");
+    outtextxy((int)contentX, (int)contentY, "[节拍偏移]"); // [节拍偏移]
+    contentY += 22;
+
+    settextcolor(RGB(255, 255, 255));
+    settextstyle(18, 0, "Consolas");
+    char offsetStr[64];
+    snprintf(offsetStr, sizeof(offsetStr), "偏移: %.0f ms  (A/D: 左/右调整，每次5ms)", manualOffset); // 偏移: xx ms  (A/D: 左/右调整，每次5ms)
+    outtextxy((int)contentX, (int)contentY, offsetStr);
+    contentY += 35;
+
+    // ===== 节拍统计 =====
+    settextcolor(RGB(0, 255, 200));
+    settextstyle(14, 0, "Consolas");
+    outtextxy((int)contentX, (int)contentY, "[节拍统计]"); // [节拍统计]
+    contentY += 22;
+
+    int accentCount = 0;
+    for (const auto& b : analysisResult.beats) {
+        if (b.isAccent) accentCount++;
+    }
+
+    settextcolor(RGB(200, 200, 200));
+    settextstyle(16, 0, "Consolas");
+    char statStr[128];
+    snprintf(statStr, sizeof(statStr), "总节拍: %zu  |  重音: %d  |  普通: %zu",
+             analysisResult.beats.size(), accentCount, analysisResult.beats.size() - accentCount); // 总节拍 | 重音 | 普通
+    outtextxy((int)contentX, (int)contentY, statStr);
+    contentY += 22;
+    snprintf(statStr, sizeof(statStr), "生成音符: %zu", analysisResult.chart.size()); // 生成音符
+    outtextxy((int)contentX, (int)contentY, statStr);
+    contentY += 35;
+
+    // ===== 节拍时间线预览 =====
+    settextcolor(RGB(0, 255, 200));
+    settextstyle(14, 0, "Consolas");
+    outtextxy((int)contentX, (int)contentY, "[音符分布预览]"); // [音符分布预览]
+    contentY += 20;
+
+    float tlX = contentX;
+    float tlY = contentY;
+    float tlW = panelW - 60;
+    float tlH = 60.0f;
+
+    // 时间线底板
+    sf::RectangleShape tlBg({tlW, tlH});
+    tlBg.setPosition({tlX, tlY});
+    tlBg.setFillColor(sf::Color(10, 10, 20, 200));
+    tlBg.setOutlineColor(sf::Color(60, 60, 80));
+    tlBg.setOutlineThickness(1.0f);
+    g_window->draw(tlBg);
+
+    // 轨道分割线
+    for (int i = 1; i < 4; i++) {
+        float lx = tlX + (tlW / 4.0f) * i;
+        sf::RectangleShape divider({1.0f, tlH});
+        divider.setPosition({lx, tlY});
+        divider.setFillColor(sf::Color(255, 255, 255, 20));
+        g_window->draw(divider);
+    }
+
+    // 绘制音符点
+    if (!analysisResult.chart.empty()) {
+        long long maxTime = analysisResult.chart.back().first;
+        if (maxTime > 0) {
+            sf::Color trackColors[4] = {
+                sf::Color(0, 200, 200), sf::Color(200, 80, 80),
+                sf::Color(80, 200, 80), sf::Color(200, 200, 80)
+            };
+            for (const auto& [t, trk] : analysisResult.chart) {
+                float ratio = (float)t / maxTime;
+                float dotX = tlX + tlW * ratio;
+                float dotY = tlY + (trk + 0.5f) * (tlH / 4.0f);
+                float dotR = 3.0f;
+                sf::CircleShape dot(dotR);
+                dot.setOrigin({dotR, dotR});
+                dot.setPosition({dotX, dotY});
+                dot.setFillColor(trackColors[trk]);
+                g_window->draw(dot);
+            }
+        }
+    }
+    contentY += tlH + 15;
+
+    // ===== 操作按钮 =====
+    const char* btnTexts[] = {"BPM", "偏移", "开始游戏", "导出", "返回"}; // 偏移、开始游戏、导出、返回
+    COLORREF btnColors[] = {
+        RGB(255, 200, 80), RGB(255, 200, 80),
+        RGB(100, 255, 100), RGB(100, 200, 255), RGB(255, 100, 100)
+    };
+    float btnW = 120.0f, btnH = 36.0f;
+    float btnStartX = contentX;
+    float btnY = contentY;
+    float btnSpacing = 15.0f;
+
+    for (int i = 0; i < 5; i++) {
+        float bx = btnStartX + i * (btnW + btnSpacing);
+        sf::RectangleShape btn({btnW, btnH});
+        btn.setPosition({bx, btnY});
+        if (i == analysisMenuSelection) {
+            btn.setFillColor(sf::Color(80, 80, 100, 255));
+            btn.setOutlineColor(sf::Color(
+                (btnColors[i] >> 16) & 0xFF, (btnColors[i] >> 8) & 0xFF, btnColors[i] & 0xFF, 255));
+            btn.setOutlineThickness(2.0f);
+        } else {
+            btn.setFillColor(sf::Color(40, 40, 55, 200));
+            btn.setOutlineColor(sf::Color(80, 80, 100, 100));
+            btn.setOutlineThickness(1.0f);
+        }
+        g_window->draw(btn);
+
+        settextcolor(btnColors[i]);
+        settextstyle(14, 0, "Consolas");
+        int tw = textwidth(btnTexts[i]);
+        outtextxy((int)(bx + (btnW - tw) / 2), (int)(btnY + 10), btnTexts[i]);
+    }
+
+    // ===== 底部提示 =====
+    settextcolor(RGB(120, 120, 140));
+    settextstyle(12, 0, "Consolas");
+    const char* hint1 = "W/S: 切换  |  A/D: 调整  |  T: 点拍校准  |  R: 重新分析"; // W/S: 切换 | A/D: 调整 | T: 点拍校准 | R: 重新分析
+    const char* hint2 = "ENTER: 确认  |  ESC: 返回菜单"; // ENTER: 确认 | ESC: 返回菜单
+    outtextxy((int)(panelX + (panelW - textwidth(hint1)) / 2), (int)(panelY + panelH - 40), hint1);
+    outtextxy((int)(panelX + (panelW - textwidth(hint2)) / 2), (int)(panelY + panelH - 22), hint2);
+
+    // 点拍模式指示
+    if (isInTapping) {
+        settextcolor(RGB(255, 100, 100));
+        settextstyle(16, 0, "Consolas");
+        char tapStr[64];
+        snprintf(tapStr, sizeof(tapStr), "[点拍模式] 按 T 键跟着节奏点（至少3次）", songAnalyzer.getTapCount()); // [点拍模式] 按 T 键跟着节奏点（至少3次）
+        int tapW = textwidth(tapStr);
+        // 高亮底板
+        sf::RectangleShape tapBg({(float)(tapW + 20), 28.0f});
+        tapBg.setPosition({panelX + (panelW - tapW - 20) / 2, panelY + panelH - 70});
+        tapBg.setFillColor(sf::Color(255, 50, 50, 60));
+        tapBg.setOutlineColor(sf::Color(255, 100, 100, 150));
+        tapBg.setOutlineThickness(1.0f);
+        g_window->draw(tapBg);
+        outtextxy((int)(panelX + (panelW - tapW) / 2), (int)(panelY + panelH - 65), tapStr);
+    }
+}
+
+// ========== V3.3: 成就弹窗更新 ==========
+void GameWindow::updateAchievementPopups(float dt) {
+    for (int i = (int)achievementPopups.size() - 1; i >= 0; i--) {
+        achievementPopups[i].elapsed += dt;
+        if (achievementPopups[i].elapsed >= AchievementPopup::DURATION) {
+            achievementPopups.erase(achievementPopups.begin() + i);
+        }
+    }
+}
+
+// ========== V3.3: 成就弹窗绘制 ==========
+void GameWindow::drawAchievementPopups() {
+    using namespace _easyx_impl;
+    if (!g_window || !g_windowOpen) return;
+
+    for (size_t i = 0; i < achievementPopups.size(); i++) {
+        auto& pop = achievementPopups[i];
+        float t = pop.elapsed / AchievementPopup::DURATION;
+
+        // 从顶部滑入，最后0.5秒淡出
+        float alpha = 1.0f;
+        float slideIn = std::min(t * 4.0f, 1.0f); // 0.25秒滑入
+        if (t > 0.8f) alpha = 1.0f - (t - 0.8f) / 0.2f; // 最后20%淡出
+        if (alpha < 0) alpha = 0;
+
+        float popupW = 300.0f, popupH = 60.0f;
+        float popupX = (width - popupW) / 2.0f;
+        float popupY = 20.0f + i * 70.0f - (1.0f - slideIn) * 80.0f; // 滑入动画
+
+        uint8_t a = (uint8_t)(alpha * 220);
+
+        // 弹窗底板
+        sf::RectangleShape bg({popupW, popupH});
+        bg.setPosition({popupX, popupY});
+        bg.setFillColor(sf::Color(20, 30, 50, a));
+        bg.setOutlineColor(sf::Color(255, 215, 0, (uint8_t)(alpha * 200)));
+        bg.setOutlineThickness(2.0f);
+        g_window->draw(bg);
+
+        // 图标
+        settextcolor(RGB(255, 215, 0));
+        settextstyle(28, 0, "Consolas");
+        outtextxy((int)(popupX + 15), (int)(popupY + 15), pop.icon.c_str());
+
+        // 标题
+        settextcolor(RGB(255, 255, 255));
+        settextstyle(18, 0, "Consolas");
+        outtextxy((int)(popupX + 55), (int)(popupY + 10), pop.title.c_str());
+
+        // 描述
+        settextcolor(RGB(180, 180, 180));
+        settextstyle(13, 0, "Consolas");
+        outtextxy((int)(popupX + 55), (int)(popupY + 35), pop.description.c_str());
+    }
+}
+
+// ========== V3.3: 成就界面绘制 ==========
+void GameWindow::drawAchievementsScreen() {
+    using namespace _easyx_impl;
+    if (!g_window || !g_windowOpen) return;
+
+    // 背景
+    sf::RectangleShape mask({(float)width, (float)height});
+    mask.setPosition({0, 0});
+    mask.setFillColor(sf::Color(0, 0, 0, 220));
+    g_window->draw(mask);
+
+    float panelW = 600.0f, panelH = 500.0f;
+    float panelX = (width - panelW) / 2.0f;
+    float panelY = (height - panelH) / 2.0f;
+
+    sf::RectangleShape panel({panelW, panelH});
+    panel.setPosition({panelX, panelY});
+    panel.setFillColor(sf::Color(20, 20, 30, 240));
+    panel.setOutlineColor(sf::Color(255, 215, 0, 150));
+    panel.setOutlineThickness(2.0f);
+    g_window->draw(panel);
+
+    // 标题
+    settextcolor(RGB(255, 215, 0));
+    settextstyle(36, 0, "Consolas");
+    const char* title = "Achievements";
+    int titleW = textwidth(title);
+    outtextxy((int)(panelX + (panelW - titleW) / 2), (int)(panelY + 20), title);
+
+    // 进度
+    int unlocked = achievementSystem.getUnlockedCount();
+    int total = (int)achievementSystem.getAll().size();
+    settextcolor(RGB(180, 180, 180));
+    settextstyle(14, 0, "Consolas");
+    char progStr[64];
+    snprintf(progStr, sizeof(progStr), "%d / %d unlocked", unlocked, total);
+    int progW = textwidth(progStr);
+    outtextxy((int)(panelX + (panelW - progW) / 2), (int)(panelY + 60), progStr);
+
+    // 成就列表
+    auto& all = achievementSystem.getAll();
+    float itemY = panelY + 90;
+    float itemH = 38.0f;
+
+    for (size_t i = 0; i < all.size(); i++) {
+        float y = itemY + i * itemH;
+        if (y + itemH > panelY + panelH - 70) break;
+
+        // 背景条
+        sf::RectangleShape row({panelW - 40, itemH - 4});
+        row.setPosition({panelX + 20, y});
+        if (all[i].unlocked) {
+            row.setFillColor(sf::Color(40, 50, 30, 200));
+            row.setOutlineColor(sf::Color(100, 255, 100, 80));
+        } else {
+            row.setFillColor(sf::Color(30, 30, 40, 150));
+            row.setOutlineColor(sf::Color(60, 60, 80, 80));
+        }
+        row.setOutlineThickness(1.0f);
+        g_window->draw(row);
+
+        // 图标
+        settextstyle(22, 0, "Consolas");
+        if (all[i].unlocked) {
+            settextcolor(RGB(255, 215, 0));
+        } else {
+            settextcolor(RGB(60, 60, 70));
+        }
+        outtextxy((int)(panelX + 30), (int)(y + 8), all[i].icon);
+
+        // 名称
+        if (all[i].unlocked) {
+            settextcolor(RGB(255, 255, 255));
+        } else {
+            settextcolor(RGB(80, 80, 100));
+        }
+        settextstyle(16, 0, "Consolas");
+        outtextxy((int)(panelX + 65), (int)(y + 5), all[i].name);
+
+        // 描述
+        if (all[i].unlocked) {
+            settextcolor(RGB(150, 200, 150));
+        } else {
+            settextcolor(RGB(60, 60, 80));
+        }
+        settextstyle(12, 0, "Consolas");
+        outtextxy((int)(panelX + 65), (int)(y + 24), all[i].description);
+
+        // 解锁时间
+        if (all[i].unlocked) {
+            settextcolor(RGB(120, 150, 120));
+            settextstyle(11, 0, "Consolas");
+            int timeW = textwidth(all[i].unlockedTime.c_str());
+            outtextxy((int)(panelX + panelW - timeW - 30), (int)(y + 12), all[i].unlockedTime.c_str());
+        }
+    }
+
+    // 返回按钮
+    float btnW = 200.0f, btnH = 40.0f;
+    float btnX = panelX + (panelW - btnW) / 2;
+    float btnY = panelY + panelH - 60;
+    sf::RectangleShape btn({btnW, btnH});
+    btn.setPosition({btnX, btnY});
+    btn.setFillColor(sf::Color(80, 80, 100, 255));
+    btn.setOutlineColor(sf::Color(255, 100, 100, 200));
+    btn.setOutlineThickness(2.0f);
+    g_window->draw(btn);
+
+    settextcolor(RGB(255, 100, 100));
+    settextstyle(20, 0, "Consolas");
+    const char* backText = "Back";
+    int backW = textwidth(backText);
+    outtextxy((int)(btnX + (btnW - backW) / 2), (int)(btnY + 10), backText);
+
+    // 提示
+    settextcolor(RGB(100, 100, 120));
+    settextstyle(12, 0, "Consolas");
+    outtextxy((int)(panelX + (panelW - textwidth("ESC/ENTER: Return")) / 2), (int)(panelY + panelH - 20), "ESC/ENTER: Return");
+}
+
 // ========== 主循环 ==========
 
 void GameWindow::run() {
@@ -1174,9 +1622,13 @@ void GameWindow::run() {
         if (gameState == MENU) {
             if (isInSettings) {
                 handleSettingsInput();
+            } else if (showAchievements) {
+                handleAchievementsInput();
             } else {
                 handleMenuInput();
             }
+        } else if (gameState == ANALYZING) {
+            handleAnalysisInput();
         } else if (gameState == PLAYING) {
             handleInput();
             if (!isRunning) break;

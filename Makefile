@@ -23,7 +23,10 @@ SRCS = $(SRC_DIR)/main.cpp \
        $(SRC_DIR)/ScoreSystem.cpp \
        $(SRC_DIR)/AudioManager.cpp \
        $(SRC_DIR)/BeatParser.cpp \
-       $(SRC_DIR)/DataManager.cpp
+       $(SRC_DIR)/DataManager.cpp \
+       $(SRC_DIR)/SongAnalyzer.cpp \
+       $(SRC_DIR)/ChartPackage.cpp \
+       $(SRC_DIR)/AchievementSystem.cpp
 
 OBJS = $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(SRCS))
 

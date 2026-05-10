@@ -26,7 +26,8 @@ AudioManager::AudioManager() : bgmLoaded(false), sfxLoaded(false) {
 }
 
 bool AudioManager::loadBuffer(sf::SoundBuffer& buffer, const std::vector<int16_t>& data) {
-    return buffer.loadFromSamples(data.data(), data.size(), 1, SAMPLE_RATE);
+    std::vector<sf::SoundChannel> channelMap = {sf::SoundChannel::Mono};
+    return buffer.loadFromSamples(data.data(), data.size(), 1, SAMPLE_RATE, channelMap);
 }
 
 std::vector<int16_t> AudioManager::generateTone(float freq, float duration,

@@ -26,6 +26,9 @@
 #include "Animations.h"
 #include "BeatParser.h"
 #include "DataManager.h"
+#include "SongAnalyzer.h"
+#include "ChartPackage.h"
+#include "AchievementSystem.h"
 
 /**
  * @brief 游戏状态枚举
@@ -34,7 +37,8 @@ enum GameState {
     MENU,       // 主菜单（V2.0新增）
     PLAYING,    // 游戏中
     PAUSED,     // V3.1: 游戏暂停
-    RESULT      // 结算界面
+    RESULT,     // 结算界面
+    ANALYZING   // V3.2: 歌曲分析界面
 };
 
 /**
@@ -59,9 +63,32 @@ private:
     // ========== V2.0新增：节拍解析与数据管理 ==========
     BeatParser beatParser;              // 节拍解析器
     DataManager dataManager;            // 数据管理器（排行榜）
+    SongAnalyzer songAnalyzer;          // V3.2: 歌曲分析器
+    AchievementSystem achievementSystem; // V3.3: 成就系统
     std::string currentSongName;        // 当前歌曲名称
     Difficulty currentDifficulty;       // 当前难度
     BeatParser::ParseResult parseResult; // 解析结果
+
+    // ========== V3.2: 歌曲分析状态 ==========
+    SongAnalyzer::AnalysisResult analysisResult; // 分析结果
+    std::string analysisFilePath;       // 当前分析的文件路径
+    int analysisMenuSelection = 0;      // 分析界面菜单选择 0:BPM 1:偏移 2:开始 3:导出 4:返回
+    float manualBPM = 0;               // 手动BPM（0表示用自动检测的）
+    float manualOffset = 0;            // 手动偏移(ms)
+    bool analysisDone = false;          // 分析是否完成
+    bool isInTapping = false;           // 是否在点拍模式
+
+    // ========== V3.3: 成就弹窗 ==========
+    struct AchievementPopup {
+        std::string title;
+        std::string description;
+        std::string icon;
+        float elapsed = 0.0f;
+        static constexpr float DURATION = 3.0f;
+    };
+    std::vector<AchievementPopup> achievementPopups;
+    int totalSongsPlayed = 0;
+    std::string exeDir;
 
     // ========== 纹理资源管理 ==========
     TextureManager textures;
@@ -93,6 +120,8 @@ private:
     int difficultySelection = 1;    // 难度选择（默认Normal）
     bool keyMenuWasPressed = false; // 菜单按键防重复
     bool importRequested = false;   // 是否请求导入MP3
+    bool chartExportRequested = false; // V3.3: 导出谱面
+    bool showAchievements = false;  // V3.3: 显示成就界面
 
     GameState gameState;
     long long gameStartTime;
@@ -133,6 +162,7 @@ private:
     int settingsMenuSelection = 0;       // 设置菜单选择索引
     bool isInSettings = false;            // 是否在设置界面
     bool isAdjustingVolume = false;       // 是否正在调节音量
+    std::string configFilePath;           // 配置文件完整路径
 
     // ========== V3.1: 按键自定义 ==========
     int customKeys[4] = {  // 自定义按键，存储虚拟键码，默认A/S/D/F
@@ -187,8 +217,19 @@ private:
     void drawNewResultScreen();  // 新结算界面
     void handlePauseInput();     // 暂停界面输入处理
     void handleSettingsInput();  // 设置界面输入处理
-    void loadConfig();           // 加载本地配置
+    void handleAnalysisInput();  // V3.2: 分析界面输入处理
+    void drawAnalysisScreen();   // V3.2: 分析界面绘制
+    void drawAchievementsScreen(); // V3.3: 成就界面
+    void handleAchievementsInput(); // V3.3: 成就界面输入
+    void drawAchievementPopups(); // V3.3: 成就弹窗绘制
+    void updateAchievementPopups(float dt);
+    std::string getFileNameWithoutExt(const std::string& filePath);
+    void loadSongForPlaying();   // V3.2: 加载歌曲进入游戏
+    void loadConfig(const std::string& path = "config.ini"); // 加载本地配置
     void saveConfig();           // 保存本地配置
+    void startAnalysis();        // V3.2: 开始分析歌曲
+    void exportCurrentSong();    // V3.3: 导出当前歌曲
+    void importChartPackage();   // V3.3: 导入谱面
     int getTrackX(int trackId) const;
     bool isGameFinished() const;
     const char* getRating() const;

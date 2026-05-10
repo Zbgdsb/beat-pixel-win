@@ -10,6 +10,25 @@
 #include <cstdlib>
 #include <algorithm>
 
+#ifndef _WIN32
+#include <mach-o/dyld.h>
+#include <unistd.h>
+#endif
+
+// 获取可执行文件所在目录（兼容Finder双击启动）
+static std::string getExeDir() {
+    char buf[1024];
+    uint32_t size = sizeof(buf);
+    if (_NSGetExecutablePath(buf, &size) == 0) {
+        std::string path(buf);
+        auto pos = path.find_last_of('/');
+        if (pos != std::string::npos) return path.substr(0, pos);
+    }
+    char cwd[512];
+    if (getcwd(cwd, sizeof(cwd))) return cwd;
+    return ".";
+}
+
 // 静态常量定义
 const char GameWindow::TRACK_KEYS[4] = {'A', 'S', 'D', 'F'};
 const COLORREF GameWindow::TRACK_COLORS[4] = {
@@ -207,8 +226,16 @@ bool GameWindow::init() {
     setbkcolor(RGB(15, 15, 15));
     cleardevice();
 
+    // 基于可执行文件位置定位资源目录
+    exeDir = getExeDir();
+    std::string texPath = exeDir + "/assets/textures";
+    std::string configPath = exeDir + "/config.ini";
+    std::string lbPath = exeDir + "/leaderboard.dat";
+    std::string achPath = exeDir + "/achievements.dat";
+
     // 加载所有纹理资源
-    bool texOk = textures.loadAll("assets/textures");
+    bool texOk = textures.loadAll(texPath);
+    if (!texOk) texOk = textures.loadAll("assets/textures");
     if (!texOk) texOk = textures.loadAll("../assets/textures");
     if (!texOk) {
         printf("[GameWindow] 警告：纹理加载失败，使用后备渲染\n");
@@ -218,10 +245,13 @@ bool GameWindow::init() {
     fflush(stdout);
 
     // 初始化数据管理器（排行榜）
-    dataManager.init("leaderboard.dat");
+    dataManager.init(lbPath);
+
+    // 初始化成就系统
+    achievementSystem.init(achPath);
 
     // 加载本地配置（音量等）
-    loadConfig();
+    loadConfig(configPath);
 
     audioManager.init();
     // 设置初始音量
