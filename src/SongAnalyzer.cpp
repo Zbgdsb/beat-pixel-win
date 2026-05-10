@@ -12,6 +12,7 @@
 #endif
 #else
 #include <SFML/Audio.hpp>
+#include <mach-o/dyld.h>
 #endif
 #include <cmath>
 #include <algorithm>
@@ -26,6 +27,18 @@
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
+// V3.3: 获取可执行文件目录
+static std::string getExeDir() {
+    char path[1024];
+    uint32_t size = sizeof(path);
+    if (_NSGetExecutablePath(path, &size) == 0) {
+        char* slash = strrchr(path, '/');
+        if (slash) *slash = '\0';
+        return std::string(path);
+    }
+    return ".";
+}
 
 // ========== 常量 ==========
 static const size_t WINDOW_SIZE = 1024;
@@ -81,14 +94,23 @@ SongAnalyzer::AnalysisResult SongAnalyzer::analyze(const std::string& filePath) 
     printf("[SongAnalyzer] %zu 个节拍点\n", result.beats.size());
     fflush(stdout);
 
-    // 4. 基于自相关的BPM检测（精度±0.5）
+    // 4. BPM检测（优先用Python结果，否则用C++自相关）
     printf("[SongAnalyzer] BPM分析...\n");
     fflush(stdout);
-    auto [bpm, confidence] = detectBPMPrecise();
-    result.bpm = bpm;
-    result.bpmConfidence = confidence;
-    printf("[SongAnalyzer] BPM: %.1f, 置信度: %.1f%%\n", bpm, confidence);
+    if (resultBPM > 0) {
+        result.bpm = resultBPM;
+        result.bpmConfidence = 85.0f;
+        printf("[SongAnalyzer] BPM(Python): %.1f\n", result.bpm);
+    } else {
+        auto [bpm, confidence] = detectBPMPrecise();
+        result.bpm = bpm;
+        result.bpmConfidence = confidence;
+        printf("[SongAnalyzer] BPM(C++): %.1f, 置信度: %.1f%%\n", bpm, confidence);
+    }
     fflush(stdout);
+
+    float bpm = result.bpm;
+    float confidence = result.bpmConfidence;
 
     // 5. 低置信度时尝试修正
     if (confidence < 90.0f) {
@@ -209,10 +231,96 @@ std::vector<float> SongAnalyzer::autocorrelation(const std::vector<float>& signa
 
 /**
  * @brief 频谱onset检测算法
- * @details 用ffmpeg转PCM，然后计算能量通量(spectral flux)检测节拍
- *          比简单能量峰值检测准确率高很多
+ * @details 优先调用Python脚本(频谱分析)，失败则用C++内置算法
  */
 std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsWithAccent() {
+    // 方案1: 调用Python脚本做频谱onset检测
+    std::vector<BeatInfo> beats = detectBeatsViaPython();
+    if (!beats.empty()) {
+        printf("[SongAnalyzer] Python频谱onset检测: %zu个节拍点\n", beats.size());
+        fflush(stdout);
+        return beats;
+    }
+
+    // 方案2: 降级到C++内置算法
+    printf("[SongAnalyzer] Python不可用，使用C++内置算法\n");
+    fflush(stdout);
+    return detectBeatsFallback();
+}
+
+std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsViaPython() {
+    // 查找Python脚本路径
+    std::string scriptPath = getExeDir() + "/tools/beat_detect.py";
+    FILE* f = fopen(scriptPath.c_str(), "r");
+    if (!f) {
+        // 尝试相对于exe的路径
+        scriptPath = getExeDir() + "/../tools/beat_detect.py";
+        f = fopen(scriptPath.c_str(), "r");
+    }
+    if (!f) return {};
+    fclose(f);
+
+    std::string cmd = "python3 '" + scriptPath + "' '" + currentFilePath + "' 2>/dev/null";
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) return {};
+
+    // 读取JSON输出
+    std::string json;
+    char buffer[4096];
+    while (fgets(buffer, sizeof(buffer), pipe)) {
+        json += buffer;
+    }
+    int ret = pclose(pipe);
+    if (ret != 0 || json.empty()) return {};
+
+    // 简易JSON解析
+    std::vector<BeatInfo> beats;
+
+    // 提取bpm
+    size_t bpmPos = json.find("\"bpm\"");
+    if (bpmPos != std::string::npos) {
+        size_t colon = json.find(":", bpmPos);
+        size_t end = json.find(",", colon);
+        if (end == std::string::npos) end = json.find("}", colon);
+        std::string val = json.substr(colon + 1, end - colon - 1);
+        // 去空格
+        val.erase(0, val.find_first_not_of(" \t\n\r"));
+        resultBPM = std::stof(val);
+    }
+
+    // 提取beats数组
+    size_t beatsStart = json.find("[", json.find("\"beats\""));
+    if (beatsStart == std::string::npos) return {};
+
+    size_t pos = beatsStart + 1;
+    while (pos < json.size()) {
+        size_t timePos = json.find("\"timeMs\":", pos);
+        if (timePos == std::string::npos || timePos > json.find("]", beatsStart)) break;
+
+        size_t valStart = json.find(":", timePos) + 1;
+        size_t valEnd = json.find(",", valStart);
+        if (valEnd == std::string::npos) valEnd = json.find("}", valStart);
+        std::string timeStr = json.substr(valStart, valEnd - valStart);
+        timeStr.erase(0, timeStr.find_first_not_of(" \t\n\r"));
+
+        size_t accentPos = json.find("\"isAccent\":", timePos);
+        bool isAccent = false;
+        if (accentPos != std::string::npos && accentPos < json.find("}", timePos)) {
+            size_t aStart = json.find(":", accentPos) + 1;
+            std::string aStr = json.substr(aStart, 10);
+            isAccent = aStr.find("true") != std::string::npos;
+        }
+
+        long long timeMs = std::stoll(timeStr);
+        beats.push_back({timeMs, 1.0f, isAccent});
+
+        pos = json.find("}", timePos) + 1;
+    }
+
+    return beats;
+}
+
+std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsFallback() {
     // Step 1: 用ffmpeg转PCM (16-bit, mono, 22050Hz)
     const int SR = 22050;
     char tmpPcm[] = "/tmp/beatpixel_pcm_XXXXXX.pcm";

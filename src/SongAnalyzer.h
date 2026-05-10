@@ -136,6 +136,9 @@ private:
      * @brief 检测节拍点（带重音标记）
      */
     std::vector<BeatInfo> detectBeatsWithAccent();
+    std::vector<BeatInfo> detectBeatsViaPython();    // V3.3: Python aubio检测
+    std::vector<BeatInfo> detectBeatsFallback();      // V3.3: C++内置降级方案
+    float resultBPM = 0;                              // V3.3: Python检测的BPM
 
     /**
      * @brief 基于BPM的节拍网格生成
