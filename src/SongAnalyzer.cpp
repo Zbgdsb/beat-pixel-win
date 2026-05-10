@@ -41,6 +41,7 @@ SongAnalyzer::SongAnalyzer() : tapCount(0), sampleRate(0) {
 SongAnalyzer::AnalysisResult SongAnalyzer::analyze(const std::string& filePath) {
     AnalysisResult result;
     result.success = false;
+    currentFilePath = filePath;
 
     printf("[SongAnalyzer] 开始分析: %s\n", filePath.c_str());
     fflush(stdout);
@@ -206,87 +207,149 @@ std::vector<float> SongAnalyzer::autocorrelation(const std::vector<float>& signa
 
 // ========== 节拍检测（带重音标记） ==========
 
+/**
+ * @brief 频谱onset检测算法
+ * @details 用ffmpeg转PCM，然后计算能量通量(spectral flux)检测节拍
+ *          比简单能量峰值检测准确率高很多
+ */
 std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsWithAccent() {
-    size_t numWindows = (samples.size() - WINDOW_SIZE) / HOP_SIZE + 1;
-    std::vector<float> energies;
-    energies.reserve(numWindows);
-    for (size_t i = 0; i < numWindows; i++) {
-        energies.push_back(calculateEnergy(i * HOP_SIZE, WINDOW_SIZE));
+    // Step 1: 用ffmpeg转PCM (16-bit, mono, 22050Hz)
+    const int SR = 22050;
+    char tmpPcm[] = "/tmp/beatpixel_pcm_XXXXXX.pcm";
+    int tmpFd = mkstemps(tmpPcm, 4);
+    if (tmpFd < 0) return {};
+    close(tmpFd);
+
+    std::string cmd = "ffmpeg -y -i '" + currentFilePath + "' -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " '" + tmpPcm + "' 2>/dev/null";
+    int ret = system(cmd.c_str());
+    if (ret != 0) {
+        remove(tmpPcm);
+        return {};
     }
 
-    // 局部平均能量
-    std::vector<float> localAvg(energies.size(), 0.0f);
-    for (size_t i = 0; i < energies.size(); i++) {
-        size_t start = (i >= LOCAL_ENERGY_FRAMES) ? i - LOCAL_ENERGY_FRAMES : 0;
-        float sum = 0;
-        for (size_t j = start; j <= i; j++) sum += energies[j];
-        localAvg[i] = sum / (i - start + 1);
+    // Step 2: 读取PCM样本
+    FILE* fp = fopen(tmpPcm, "rb");
+    if (!fp) { remove(tmpPcm); return {}; }
+
+    fseek(fp, 0, SEEK_END);
+    long fileSize = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    size_t numSamples = fileSize / 2; // 16-bit = 2 bytes per sample
+    std::vector<float> pcm(numSamples);
+    std::vector<int16_t> buf(numSamples);
+    fread(buf.data(), 2, numSamples, fp);
+    fclose(fp);
+    remove(tmpPcm);
+
+    // 归一化到[-1, 1]
+    for (size_t i = 0; i < numSamples; i++) {
+        pcm[i] = buf[i] / 32768.0f;
     }
 
-    // 全局能量统计（用于重音判定）
-    float globalMean = 0, globalStd = 0;
-    for (float e : energies) globalMean += e;
-    globalMean /= energies.size();
-    for (float e : energies) globalStd += (e - globalMean) * (e - globalMean);
-    globalStd = std::sqrt(globalStd / energies.size());
+    // Step 3: 计算短时能量 (STE)
+    const int WIN_SIZE = 1024;   // 窗口大小 (~46ms at 22050Hz)
+    const int HOP = 512;         // 帧移 (~23ms)
+    size_t numFrames = (numSamples - WIN_SIZE) / HOP + 1;
+    std::vector<float> ste(numFrames, 0.0f);
 
-    // 检测能量峰值
+    for (size_t f = 0; f < numFrames; f++) {
+        size_t offset = f * HOP;
+        float energy = 0;
+        for (int i = 0; i < WIN_SIZE; i++) {
+            float s = pcm[offset + i];
+            energy += s * s;
+        }
+        ste[f] = energy / WIN_SIZE;
+    }
+
+    // Step 4: 计算能量通量 (Spectral Flux) - 半波整流
+    std::vector<float> flux(numFrames, 0.0f);
+    for (size_t f = 1; f < numFrames; f++) {
+        float diff = ste[f] - ste[f - 1];
+        flux[f] = diff > 0 ? diff : 0; // 半波整流：只保留能量增加的部分
+    }
+
+    // Step 5: 自适应阈值检测onset
+    const int LOCAL_WIN = 16; // 局部窗口 (~370ms)
+    std::vector<float> localMean(numFrames, 0.0f);
+    std::vector<float> localStd(numFrames, 0.0f);
+
+    for (size_t f = 0; f < numFrames; f++) {
+        size_t start = (f >= LOCAL_WIN) ? f - LOCAL_WIN : 0;
+        float sum = 0, sumSq = 0;
+        size_t count = f - start + 1;
+        for (size_t j = start; j <= f; j++) {
+            sum += flux[j];
+            sumSq += flux[j] * flux[j];
+        }
+        localMean[f] = sum / count;
+        float variance = sumSq / count - localMean[f] * localMean[f];
+        localStd[f] = std::sqrt(std::max(0.0f, variance));
+    }
+
+    // 全局能量统计
+    float globalFluxMean = 0, globalFluxStd = 0;
+    for (float v : flux) globalFluxMean += v;
+    globalFluxMean /= numFrames;
+    for (float v : flux) globalFluxStd += (v - globalFluxMean) * (v - globalFluxMean);
+    globalFluxStd = std::sqrt(globalFluxStd / numFrames);
+
+    // 检测onset峰值
     std::vector<BeatInfo> beats;
-    for (size_t i = 1; i < energies.size() - 1; i++) {
-        float threshold = localAvg[i] * 1.5f;
-        float absThreshold = 0.001f;
+    float minIntervalMs = 150.0f; // 最小间隔150ms
+    int minIntervalFrames = (int)(minIntervalMs * SR / (1000.0f * HOP));
 
-        if (energies[i] > threshold && energies[i] > absThreshold &&
-            energies[i] > energies[i - 1] && energies[i] >= energies[i + 1]) {
-            long long timeMs = (long long)(i * HOP_SIZE * 1000.0f / sampleRate);
+    for (size_t f = 2; f < numFrames - 1; f++) {
+        // 自适应阈值 = 局部均值 + 0.5 * 局部标准差
+        float threshold = localMean[f] + 0.5f * localStd[f];
+        // 绝对阈值防止噪声触发
+        float absThreshold = globalFluxMean + 0.2f * globalFluxStd;
+        float thresh = std::max(threshold, absThreshold);
 
-            // 最小间隔150ms
-            if (!beats.empty() && (timeMs - beats.back().timeMs) < 150) continue;
+        if (flux[f] > thresh && flux[f] > flux[f - 1] && flux[f] >= flux[f + 1]) {
+            long long timeMs = (long long)(f * HOP * 1000.0f / SR);
 
-            // 跳过开头2秒
-            if (timeMs < 2000) continue;
+            // 最小间隔检查
+            if (!beats.empty() && (timeMs - beats.back().timeMs) < minIntervalMs) {
+                // 保留能量更大的那个
+                if (flux[f] > flux[f - 1]) {
+                    beats.back().timeMs = timeMs;
+                    beats.back().energy = flux[f];
+                }
+                continue;
+            }
 
-            // 重音判定：能量超过全局均值+1倍标准差
-            bool isAccent = energies[i] > (globalMean + globalStd);
+            // 跳过开头1秒
+            if (timeMs < 1000) continue;
+
+            // 重音判定：能量通量超过全局均值+1.5倍标准差
+            bool isAccent = flux[f] > (globalFluxMean + 1.5f * globalFluxStd);
 
             BeatInfo beat;
             beat.timeMs = timeMs;
-            beat.energy = energies[i];
+            beat.energy = flux[f];
             beat.isAccent = isAccent;
             beats.push_back(beat);
         }
     }
 
-    // 节拍太少则降低阈值
-    if (beats.size() < 20 && energies.size() > 10) {
+    // 节拍太少则降低阈值重试
+    if (beats.size() < 15 && numFrames > 100) {
         beats.clear();
-        for (size_t i = 1; i < energies.size() - 1; i++) {
-            if (energies[i] > localAvg[i] * 1.2f && energies[i] > 0.0005f &&
-                energies[i] > energies[i - 1] && energies[i] >= energies[i + 1]) {
-                long long timeMs = (long long)(i * HOP_SIZE * 1000.0f / sampleRate);
-                if (!beats.empty() && (timeMs - beats.back().timeMs) < 150) continue;
-                if (timeMs < 2000) continue;
-                bool isAccent = energies[i] > (globalMean + globalStd * 0.8f);
-                beats.push_back({timeMs, energies[i], isAccent});
+        for (size_t f = 2; f < numFrames - 1; f++) {
+            float thresh = std::max(localMean[f] + 0.3f * localStd[f], globalFluxMean + 0.1f * globalFluxStd);
+            if (flux[f] > thresh && flux[f] > flux[f - 1] && flux[f] >= flux[f + 1]) {
+                long long timeMs = (long long)(f * HOP * 1000.0f / SR);
+                if (!beats.empty() && (timeMs - beats.back().timeMs) < minIntervalMs) continue;
+                if (timeMs < 1000) continue;
+                beats.push_back({timeMs, flux[f], flux[f] > (globalFluxMean + globalFluxStd)});
             }
         }
     }
 
-    // 节拍太多则提高阈值
-    if (beats.size() > 500) {
-        beats.clear();
-        for (size_t i = 1; i < energies.size() - 1; i++) {
-            if (energies[i] > localAvg[i] * 2.0f && energies[i] > 0.002f &&
-                energies[i] > energies[i - 1] && energies[i] >= energies[i + 1]) {
-                long long timeMs = (long long)(i * HOP_SIZE * 1000.0f / sampleRate);
-                if (!beats.empty() && (timeMs - beats.back().timeMs) < 200) continue;
-                if (timeMs < 2000) continue;
-                bool isAccent = energies[i] > (globalMean + globalStd * 1.5f);
-                beats.push_back({timeMs, energies[i], isAccent});
-            }
-        }
-    }
-
+    printf("[SongAnalyzer] 频谱onset检测: %zu个节拍点\n", beats.size());
+    fflush(stdout);
     return beats;
 }
 

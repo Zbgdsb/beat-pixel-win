@@ -10,6 +10,10 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 static const int SAMPLE_RATE = 44100;
 static const float BGM_VOLUME = 0.20f;
 static const float SFX_VOLUME = 0.5f;
@@ -168,19 +172,78 @@ bool AudioManager::init() {
 }
 
 void AudioManager::playBGM() {
-    if (bgmLoaded && bgmSound) bgmSound->play();
+    if (usingOriginalMusic) {
+        originalMusic.play();
+    } else if (bgmLoaded && bgmSound) {
+        bgmSound->play();
+    }
 }
 
 void AudioManager::stopBGM() {
+    if (usingOriginalMusic) {
+        originalMusic.stop();
+        usingOriginalMusic = false;
+    }
     if (bgmLoaded && bgmSound) bgmSound->stop();
 }
 
 void AudioManager::pauseBGM() {
-    if (bgmLoaded && bgmSound) bgmSound->pause();
+    if (usingOriginalMusic) {
+        originalMusic.pause();
+    } else if (bgmLoaded && bgmSound) {
+        bgmSound->pause();
+    }
 }
 
 void AudioManager::resumeBGM() {
-    if (bgmLoaded && bgmSound) bgmSound->play();
+    if (usingOriginalMusic) {
+        originalMusic.play();
+    } else if (bgmLoaded && bgmSound) {
+        bgmSound->play();
+    }
+}
+
+bool AudioManager::playOriginalSong(const std::string& filePath) {
+    // 先尝试直接加载
+    if (originalMusic.openFromFile(filePath)) {
+        originalMusic.setVolume(m_musicVolume * 100.0f);
+        originalMusic.setLooping(false);
+        usingOriginalMusic = true;
+        printf("[AudioManager] 原曲加载成功\n");
+        fflush(stdout);
+        return true;
+    }
+
+    // SFML不支持该格式，用ffmpeg转换
+    printf("[AudioManager] 格式不支持，用ffmpeg转换...\n");
+    fflush(stdout);
+
+    char tmpPath[] = "/tmp/beatpixel_bgm_XXXXXX.wav";
+    int tmpFd = mkstemps(tmpPath, 4);
+    if (tmpFd < 0) return false;
+    close(tmpFd);
+
+    std::string cmd = "ffmpeg -y -i '" + filePath + "' -ar 44100 -ac 2 -f wav '" + tmpPath + "' 2>/dev/null";
+    int ret = system(cmd.c_str());
+    if (ret != 0) {
+        remove(tmpPath);
+        printf("[AudioManager] ffmpeg转换失败\n");
+        fflush(stdout);
+        return false;
+    }
+
+    bool ok = originalMusic.openFromFile(tmpPath);
+    if (ok) {
+        originalMusic.setVolume(m_musicVolume * 100.0f);
+        originalMusic.setLooping(false);
+        usingOriginalMusic = true;
+        printf("[AudioManager] 原曲转换并加载成功\n");
+    } else {
+        printf("[AudioManager] 转换后仍无法加载\n");
+    }
+    fflush(stdout);
+    // 不删除临时文件，因为Music是流式播放，需要文件存在
+    return ok;
 }
 
 /**

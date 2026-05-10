@@ -109,6 +109,7 @@ private:
     // 音频数据（从BeatParser共享）
     std::vector<float> samples;
     int sampleRate;
+    std::string currentFilePath;   // V3.3: 当前分析的文件路径
 
     /**
      * @brief 从音频文件加载采样数据

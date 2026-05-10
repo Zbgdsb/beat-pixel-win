@@ -65,6 +65,8 @@ private:
     // 背景音乐
     sf::SoundBuffer bgmBuffer;
     std::unique_ptr<sf::Sound> bgmSound;
+    sf::Music originalMusic;        // V3.3: 原曲播放
+    bool usingOriginalMusic = false; // 是否在播放原曲
 
     // 按键音效 - 复用Sound对象，避免每次按键重新创建
     sf::SoundBuffer hitBuffer;
@@ -102,6 +104,7 @@ public:
     void setMusicVolume(float volume) {
         m_musicVolume = std::max(0.0f, std::min(1.0f, volume));
         if (bgmSound) bgmSound->setVolume(m_musicVolume * 100.0f);
+        if (usingOriginalMusic) originalMusic.setVolume(m_musicVolume * 100.0f);
     }
 
     void setEffectVolume(float volume) {
@@ -126,4 +129,9 @@ public:
      * @details 根据音符时间点和轨道生成对应的旋律音高，确保BGM和谱面节奏一致
      */
     bool generateSyncedBGM(const std::vector<std::pair<long long, int>>& noteData);
+
+    /**
+     * @brief V3.3: 播放原曲MP3
+     */
+    bool playOriginalSong(const std::string& filePath);
 };

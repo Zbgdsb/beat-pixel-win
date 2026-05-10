@@ -314,7 +314,10 @@ void GameWindow::loadSongForPlaying() {
     currentBPM = analysisResult.bpm;
     bpmPulsePhase = 0.0f;
 
-    audioManager.generateSyncedBGM(noteTimeData);
+    // 优先播放原曲，失败则用合成BGM
+    if (!audioManager.playOriginalSong(analysisFilePath)) {
+        audioManager.generateSyncedBGM(noteTimeData);
+    }
     gameStartTime = GetTickCount64();
     currentTime = 0;
     gameState = PLAYING;
