@@ -78,6 +78,7 @@
 #include "GameWindow.h"
 #include <cstdio>
 #include <algorithm>
+#include <filesystem>
 #ifdef _WIN32
 #include <direct.h>
 #define getcwd _getcwd
@@ -1607,21 +1608,17 @@ void GameWindow::loadConfig(const std::string& path) {
 
 // ========== V3.3: 导入谱面 ==========
 void GameWindow::importChartPackage() {
-    // 扫描songs目录下的.beatpixel文件
+    // 扫描songs目录下的.beatpixel文件（跨平台文件系统扫描）
     std::string songsDir = exeDir + "/songs/";
-    std::string cmd = "ls '" + songsDir + "'*.beatpixel 2>/dev/null | head -1";
-    FILE* pipe = popen(cmd.c_str(), "r");
     std::string foundFile;
-    if (pipe) {
-        char buffer[512];
-        if (fgets(buffer, sizeof(buffer), pipe)) {
-            foundFile = buffer;
-            if (!foundFile.empty() && foundFile.back() == '\n')
-                foundFile.pop_back();
+    
+    for (const auto& entry : std::filesystem::directory_iterator(songsDir)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".beatpixel") {
+            foundFile = entry.path().string();
+            break;
         }
-        pclose(pipe);
     }
-
+    
     if (!foundFile.empty()) {
         std::string imported = ChartPackage::importSong(foundFile, songsDir);
         if (!imported.empty()) {
@@ -1639,21 +1636,17 @@ void GameWindow::importChartPackage() {
 void GameWindow::exportCurrentSong() {
     if (!analysisResult.success) return;
 
-    // 查找MP3文件
+    // 查找MP3文件（跨平台）
     std::string songsDir = exeDir + "/songs/";
     std::string mp3Path = songsDir + analysisResult.metadata.title + ".mp3";
     FILE* f = fopen(mp3Path.c_str(), "rb");
     if (!f) {
-        // 尝试查找实际文件名
-        std::string cmd = "ls '" + songsDir + "'*.mp3 2>/dev/null | head -1";
-        FILE* pipe = popen(cmd.c_str(), "r");
-        if (pipe) {
-            char buf[512];
-            if (fgets(buf, sizeof(buf), pipe)) {
-                mp3Path = buf;
-                if (!mp3Path.empty() && mp3Path.back() == '\n') mp3Path.pop_back();
+        // 尝试查找任意mp3文件
+        for (const auto& entry : std::filesystem::directory_iterator(songsDir)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".mp3") {
+                mp3Path = entry.path().string();
+                break;
             }
-            pclose(pipe);
         }
     } else {
         fclose(f);
@@ -1722,51 +1715,29 @@ void GameWindow::refreshSongList() {
     songList.clear();
     std::string songsDir = exeDir + "/songs/";
 
-    // 扫描目录
-    std::string cmd = "ls '" + songsDir + "' 2>/dev/null";
-    FILE* pipe = popen(cmd.c_str(), "r");
-    if (!pipe) return;
+    // 跨平台文件系统扫描
+    try {
+        for (const auto& entry : std::filesystem::directory_iterator(songsDir)) {
+            if (!entry.is_regular_file()) continue;
+            std::string filename = entry.path().filename().string();
+            std::string extension = entry.path().extension().string();
 
-    char buffer[512];
-    while (fgets(buffer, sizeof(buffer), pipe)) {
-        std::string filename = buffer;
-        // 去掉换行符
-        while (!filename.empty() && (filename.back() == '\n' || filename.back() == '\r')) {
-            filename.pop_back();
-        }
-        if (filename.empty()) continue;
-
-        // 只要.mp3或.wav文件
-        if (filename.size() > 4 && (filename.substr(filename.size() - 4) == ".mp3" || filename.substr(filename.size() - 4) == ".wav")) {
-            std::string name = filename.substr(0, filename.size() - 4);
-            std::string path = songsDir + filename;
-            // 检查是否已有谱面
-            bool hasChart = false;
-            std::string chartPath = path + ".chart.json";
-            FILE* f = fopen(chartPath.c_str(), "r");
-            if (f) { fclose(f); hasChart = true; }
-            songList.push_back({name, path, hasChart});
-        }
-    }
-    pclose(pipe);
-
-    // 扫描.beatpixel文件
-    cmd = "ls '" + songsDir + "'*.beatpixel 2>/dev/null";
-    pipe = popen(cmd.c_str(), "r");
-    if (pipe) {
-        while (fgets(buffer, sizeof(buffer), pipe)) {
-            std::string filepath = buffer;
-            while (!filepath.empty() && (filepath.back() == '\n' || filepath.back() == '\r')) {
-                filepath.pop_back();
+            if (extension == ".mp3" || extension == ".wav") {
+                std::string name = filename.substr(0, filename.size() - extension.size());
+                std::string path = entry.path().string();
+                // 检查是否已有谱面
+                bool hasChart = false;
+                std::string chartPath = path + ".chart.json";
+                FILE* f = fopen(chartPath.c_str(), "r");
+                if (f) { fclose(f); hasChart = true; }
+                songList.push_back({name, path, hasChart});
+            } else if (extension == ".beatpixel") {
+                std::string name = filename.substr(0, filename.size() - 10);
+                songList.push_back({name, entry.path().string(), true});
             }
-            if (filepath.empty()) continue;
-
-            size_t lastSlash = filepath.find_last_of('/');
-            std::string filename = (lastSlash != std::string::npos) ? filepath.substr(lastSlash + 1) : filepath;
-            std::string name = filename.substr(0, filename.size() - 10); // 去掉.beatpixel
-            songList.push_back({name, filepath, true});
         }
-        pclose(pipe);
+    } catch (const std::filesystem::filesystem_error&) {
+        printf("[GameWindow] 无法访问songs目录: %s\n", songsDir.c_str());
     }
 
     // 加一个Demo歌曲

@@ -10,13 +10,23 @@
 #include <cstdlib>
 #include <algorithm>
 
-#ifndef _WIN32
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <mach-o/dyld.h>
 #include <unistd.h>
 #endif
 
 // 获取可执行文件所在目录（兼容Finder双击启动）
 static std::string getExeDir() {
+#ifdef _WIN32
+    char buf[MAX_PATH];
+    GetModuleFileNameA(NULL, buf, MAX_PATH);
+    std::string path(buf);
+    auto pos = path.find_last_of('\\');
+    if (pos != std::string::npos) return path.substr(0, pos);
+    return ".";
+#else
     char buf[1024];
     uint32_t size = sizeof(buf);
     if (_NSGetExecutablePath(buf, &size) == 0) {
@@ -27,6 +37,7 @@ static std::string getExeDir() {
     char cwd[512];
     if (getcwd(cwd, sizeof(cwd))) return cwd;
     return ".";
+#endif
 }
 
 // 静态常量定义
