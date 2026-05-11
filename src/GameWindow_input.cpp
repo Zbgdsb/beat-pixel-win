@@ -182,19 +182,10 @@ void GameWindow::handleMenuInput() {
                 if (menuSelection == i) {
                     // 已选中，再次点击才执行
                     switch (menuSelection) {
-                        case 0:
-                            tracks.clear();
-                            scoreSystem.reset();
-                            initTracks();
-                            loadDemoSong();
-                            audioManager.generateSyncedBGM(noteTimeData);
-                            gameStartTime = GetTickCount64();
-                            currentTime = 0;
-                            gameState = PLAYING;
-                            prevCombo = 0;
-                            hitAnims.clear();
-                            textAnims.clear();
-                            audioManager.playBGM();
+                        case 0: // 歌曲列表
+                            refreshSongList();
+                            isShowingSongList = true;
+                            songListSelection = 0;
                             break;
                         case 1:
                             importRequested = true;
@@ -1011,6 +1002,12 @@ void GameWindow::updateKeyFeedback(float dt) {
 
 // ========== V3.1: 暂停界面输入处理 ==========
 void GameWindow::handlePauseInput() {
+    // 每帧重置防重复标志，确保按键能被检测到
+    static bool upWasPressed = false;
+    static bool downWasPressed = false;
+    static bool enterWasPressed = false;
+    static bool escWasPressed = false;
+
     // 先检测按键再处理事件（避免processWindowEvents消费按键）
     bool upPressed = (GetAsyncKeyState('W') & 0x8000) != 0;
     bool downPressed = (GetAsyncKeyState('S') & 0x8000) != 0;
@@ -1030,15 +1027,10 @@ void GameWindow::handlePauseInput() {
         }
     }
 
-    // 防重复触发
-    static bool upWasPressed = false;
-    static bool downWasPressed = false;
-    static bool enterWasPressed = false;
-    static bool escWasPressed = false;
-
     // ESC直接继续游戏
     if (escPressed && !escWasPressed) {
         escWasPressed = true;
+        enterWasPressed = enterPressed; // 同步ENTER状态避免误触
         long long pauseDuration = GetTickCount64() - pauseStartTime;
         gameStartTime += pauseDuration;
         audioManager.resumeBGM();
