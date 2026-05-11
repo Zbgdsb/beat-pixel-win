@@ -295,8 +295,12 @@ namespace _easyx_impl {
 }
 
 // ========== EasyX类型定义 =/
+#ifndef COLORREF
 typedef unsigned int COLORREF;
+#endif
+#ifndef DWORD
 typedef unsigned long DWORD;
+#endif
 typedef short SHORT;
 #ifndef _T
 #define _T(x) x
