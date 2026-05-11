@@ -49,7 +49,7 @@ void NormalNote::draw(int trackX, const sf::Texture& noteNormalTex) {
     const float W = 80.0f, H = 64.0f;  // 音符显示尺寸，匹配素材原始比例(约80x64)
     const float TEX_W = (float)noteNormalTex.getSize().x;  // 使用实际纹理宽度
     const float TEX_H = (float)noteNormalTex.getSize().y;  // 使用实际纹理高度
-    float cx = trackX + 50.0f;
+    float cx = trackX + 35.0f;  // TRACK_WIDTH/2 居中
     float cy = (float)y;
 
     if (isJudged) {

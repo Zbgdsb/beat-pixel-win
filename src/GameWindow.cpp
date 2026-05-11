@@ -30,12 +30,14 @@ static std::string getExeDir() {
 }
 
 // 静态常量定义
-const char GameWindow::TRACK_KEYS[4] = {'A', 'S', 'D', 'F'};
-const COLORREF GameWindow::TRACK_COLORS[4] = {
+const char GameWindow::TRACK_KEYS[6] = {'A', 'S', 'D', 'F', 'J', 'K'};
+const COLORREF GameWindow::TRACK_COLORS[6] = {
     RGB(0, 255, 255),   // 青色 - 轨道0 (A键)
     RGB(255, 100, 100), // 红色 - 轨道1 (S键)
     RGB(100, 255, 100), // 绿色 - 轨道2 (D键)
-    RGB(255, 255, 100)  // 黄色 - 轨道3 (F键)
+    RGB(255, 255, 100), // 黄色 - 轨道3 (F键)
+    RGB(255, 150, 50),  // 橙色 - 轨道4 (J键/通鼓)
+    RGB(200, 100, 255)  // 紫色 - 轨道5 (K键/Ride)
 };
 
 // 难度对应的下落速度（px/帧，60FPS下等效于 px/s ÷ 60）
@@ -47,7 +49,7 @@ const double GameWindow::DIFFICULTY_SPEEDS[3] = {
 
 const float GameWindow::PREVIEW_DURATION = 5.0f;   // 预览未来5秒
 const int GameWindow::PREVIEW_HEIGHT = 50;          // 预读条高度
-const int GameWindow::PREVIEW_Y = 8;                // 预读条Y坐标
+const int GameWindow::PREVIEW_Y = 115;              // 预读条Y坐标（移到HUD下方避免遮挡）
 
 GameWindow::GameWindow(int width, int height, int fps)
     : width(width), height(height), fps(fps),
@@ -70,10 +72,10 @@ double GameWindow::getDifficultySpeed() const {
 
 const char* GameWindow::getDifficultyName() const {
     switch (currentDifficulty) {
-        case EASY:   return "Easy";
-        case NORMAL: return "Normal";
-        case HARD:   return "Hard";
-        default:     return "Normal";
+        case EASY:   return "简单";
+        case NORMAL: return "普通";
+        case HARD:   return "困难";
+        default:     return "普通";
     }
 }
 
@@ -112,7 +114,7 @@ void GameWindow::loadDemoSong() {
 
     while (currentTimeMs < endTime) {
         int track;
-        do { track = rand() % 4; } while (track == lastTrack);
+        do { track = rand() % 6; } while (track == lastTrack);
         lastTrack = track;
 
         noteTimeData.push_back({currentTimeMs, track});
@@ -125,7 +127,7 @@ void GameWindow::loadDemoSong() {
         int doubleChance = (currentDifficulty == HARD) ? 25 : 15;
         if (rand() % 100 < doubleChance) {
             int track2;
-            do { track2 = rand() % 4; } while (track2 == track);
+            do { track2 = rand() % 6; } while (track2 == track);
             noteTimeData.push_back({currentTimeMs, track2});
             auto note2 = std::make_unique<NormalNote>(
                 track2, currentTimeMs, JUDGE_Y, speed, TRACK_COLORS[track2]
@@ -258,6 +260,7 @@ bool GameWindow::init() {
 
     // 保存soundPack，init会重置
     int savedPack = audioManager.getSoundPack();
+    audioManager.setResourceDir(exeDir);
     audioManager.init();
     audioManager.setSoundPack(savedPack);
     // 设置初始音量

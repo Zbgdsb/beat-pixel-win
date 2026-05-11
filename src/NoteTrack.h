@@ -37,6 +37,14 @@ public:
     NoteTrack(int trackId, int x, int width, int judgeY, double noteSpeed, char key);
     ~NoteTrack() = default;
 
+    // V3.7: 获取下一个未判定音符的判定时间（用于自动演示）
+    long long getNextNoteJudgeTime() const {
+        for (auto& note : notes) {
+            if (!note->getIsJudged()) return note->getJudgeTime();
+        }
+        return LLONG_MAX;
+    }
+
     void addNote(std::unique_ptr<Note> note);
 
     /**

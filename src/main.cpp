@@ -28,7 +28,7 @@
 
 int main() {
     // 创建游戏窗口实例：800x650分辨率，60FPS
-    GameWindow game(800, 650, 60);
+    GameWindow game(900, 650, 60);
 
     // 初始化游戏（创建窗口、加载谱面）
     if (!game.init()) {

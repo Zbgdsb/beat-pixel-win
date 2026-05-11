@@ -16,6 +16,8 @@
 #endif
 #include <cmath>
 #include <algorithm>
+#include <set>
+#include <map>
 #include <numeric>
 #include <cstdio>
 #include <cstdlib>
@@ -265,7 +267,7 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsViaPython() {
 
     // 读取JSON输出
     std::string json;
-    char buffer[4096];
+    char buffer[65536];
     while (fgets(buffer, sizeof(buffer), pipe)) {
         json += buffer;
     }
@@ -294,25 +296,69 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsViaPython() {
         resultBPM = std::stof(val);
     }
 
-    // 新格式: 提取beat_times_ms数组
-    size_t btmsPos = json.find("\"beat_times_ms\"");
-    if (btmsPos != std::string::npos) {
-        size_t arrStart = json.find("[", btmsPos);
-        if (arrStart != std::string::npos) {
-            size_t arrEnd = json.find("]", arrStart);
-            std::string arr = json.substr(arrStart + 1, arrEnd - arrStart - 1);
-            // 解析逗号分隔的整数
-            size_t pos = 0;
-            while (pos < arr.size()) {
-                size_t next = arr.find(",", pos);
-                if (next == std::string::npos) next = arr.size();
-                std::string num = arr.substr(pos, next - pos);
-                num.erase(0, num.find_first_not_of(" \t\n\r"));
-                if (!num.empty()) {
-                    long long timeMs = std::stoll(num);
-                    beats.push_back({timeMs, 1.0f, false});
+    // 新格式: 提取beats数组（带drum类型）
+    size_t beatsArrStart = json.find("[", json.find("\"beats\""));
+    if (beatsArrStart != std::string::npos) {
+        size_t pos = beatsArrStart + 1;
+        while (pos < json.size() && pos < json.find("]", beatsArrStart)) {
+            // 找 time 字段
+            size_t timePos = json.find("\"time\":", pos);
+            if (timePos == std::string::npos) break;
+            size_t timeEnd = json.find(",", timePos);
+            if (timeEnd == std::string::npos) timeEnd = json.find("}", timePos);
+            std::string timeStr = json.substr(timePos + 7, timeEnd - timePos - 7);
+            timeStr.erase(0, timeStr.find_first_not_of(" \t\n\r"));
+            long long timeMs = std::stoll(timeStr);
+            
+            // 找 drum 字段
+            int drumType = 0;
+            size_t drumPos = json.find("\"drum\":", timePos);
+            if (drumPos != std::string::npos) {
+                size_t quoteStart = json.find("\"", drumPos + 7);
+                size_t quoteEnd = json.find("\"", quoteStart + 1);
+                if (quoteStart != std::string::npos && quoteEnd != std::string::npos) {
+                    std::string drum = json.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+                    if (drum == "kick") drumType = 1;
+                    else if (drum == "snare") drumType = 2;
+                    else if (drum == "hihat") drumType = 3;
+                    else if (drum == "tom_low") drumType = 4;
+                    else if (drum == "tom_mid") drumType = 5;
+                    else if (drum == "tom_high") drumType = 6;
+                    else if (drum == "ride") drumType = 7;
+                    else if (drum == "crash") drumType = 8;
                 }
-                pos = next + 1;
+            }
+
+            BeatInfo b;
+            b.timeMs = timeMs;
+            b.energy = 1.0f;
+            b.isAccent = (drumType == 1 || drumType == 2 || drumType == 8);
+            b.drumType = drumType;
+            beats.push_back(b);
+            pos = json.find("}", timePos) + 1;
+        }
+    }
+
+    // 兼容旧格式: 提取beat_times_ms数组（无鼓类型）
+    if (beats.empty()) {
+        size_t btmsPos = json.find("\"beat_times_ms\"");
+        if (btmsPos != std::string::npos) {
+            size_t arrStart = json.find("[", btmsPos);
+            if (arrStart != std::string::npos) {
+                size_t arrEnd = json.find("]", arrStart);
+                std::string arr = json.substr(arrStart + 1, arrEnd - arrStart - 1);
+                size_t pos = 0;
+                while (pos < arr.size()) {
+                    size_t next = arr.find(",", pos);
+                    if (next == std::string::npos) next = arr.size();
+                    std::string num = arr.substr(pos, next - pos);
+                    num.erase(0, num.find_first_not_of(" \t\n\r"));
+                    if (!num.empty()) {
+                        long long timeMs = std::stoll(num);
+                        BeatInfo b; b.timeMs = timeMs; b.energy = 1.0f; b.isAccent = false; b.drumType = 0; beats.push_back(b);
+                    }
+                    pos = next + 1;
+                }
             }
         }
     }
@@ -331,7 +377,7 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsViaPython() {
                 std::string timeStr = json.substr(valStart, valEnd - valStart);
                 timeStr.erase(0, timeStr.find_first_not_of(" \t\n\r"));
                 long long timeMs = std::stoll(timeStr);
-                beats.push_back({timeMs, 1.0f, false});
+                BeatInfo b; b.timeMs = timeMs; b.energy = 1.0f; b.isAccent = false; b.drumType = 0; beats.push_back(b);
                 pos = json.find("}", timePos) + 1;
             }
         }
@@ -339,7 +385,6 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsViaPython() {
 
     return beats;
 }
-
 std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsFallback() {
     // Step 1: 用ffmpeg转PCM (16-bit, mono, 22050Hz)
     const int SR = 22050;
@@ -430,7 +475,7 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsFallback() {
 
     for (size_t f = 2; f < numFrames - 1; f++) {
         // 自适应阈值 = 局部均值 + 0.5 * 局部标准差
-        float threshold = localMean[f] + 0.5f * localStd[f];
+        float threshold = localMean[f] + 0.25f * localStd[f];  // 降低阈值增加音符密度
         // 绝对阈值防止噪声触发
         float absThreshold = globalFluxMean + 0.2f * globalFluxStd;
         float thresh = std::max(threshold, absThreshold);
@@ -471,7 +516,7 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsFallback() {
                 long long timeMs = (long long)(f * HOP * 1000.0f / SR);
                 if (!beats.empty() && (timeMs - beats.back().timeMs) < minIntervalMs) continue;
                 if (timeMs < 1000) continue;
-                beats.push_back({timeMs, flux[f], flux[f] > (globalFluxMean + globalFluxStd)});
+                BeatInfo b; b.timeMs = timeMs; b.energy = flux[f]; b.isAccent = (flux[f] > (globalFluxMean + globalFluxStd)); b.drumType = 0; beats.push_back(b);
             }
         }
     }
@@ -500,11 +545,9 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::alignBeatsToGrid(
     if (grid.empty() || detected.empty()) return detected;
 
     std::vector<BeatInfo> aligned;
-    float tolerance = 80.0f; // ±80ms容差
 
     for (size_t gi = 0; gi < grid.size(); gi++) {
         long long gridTime = grid[gi];
-        // 找最近的检测到的节拍
         float minDist = 1e9f;
         size_t bestIdx = 0;
         for (size_t di = 0; di < detected.size(); di++) {
@@ -515,16 +558,25 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::alignBeatsToGrid(
             }
         }
 
+        // 鼓组分档容差：核心鼓±10ms，装饰鼓±20ms，Hihat±30ms
+        float tol = 30.0f;
+        int dt = detected[bestIdx].drumType;
+        if (dt == 1 || dt == 2) tol = 10.0f;       // kick/snare
+        else if (dt >= 4 && dt <= 7) tol = 20.0f;  // tom/ride
+
         BeatInfo beat;
         beat.timeMs = gridTime;
-        if (minDist < tolerance) {
-            // 用检测到的节拍数据
+        if (minDist < tol) {
             beat.energy = detected[bestIdx].energy;
             beat.isAccent = detected[bestIdx].isAccent;
+            beat.drumType = detected[bestIdx].drumType;
+        } else if (dt == 1 || dt == 2) {
+            // 核心鼓超出容差，判定为误检，跳过
+            continue;
         } else {
-            // 网格上没有对应节拍，使用低能量
             beat.energy = 0.001f;
             beat.isAccent = false;
+            beat.drumType = 0;
         }
         aligned.push_back(beat);
     }
@@ -534,86 +586,212 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::alignBeatsToGrid(
 
 // ========== 谱面生成 ==========
 
+/**
+ * @brief V3.6: 鼓组类型 → 固定轨道映射（贴合真实架子鼓逻辑）
+ * Kick→0(A), Snare→3(F), Hihat→1/2(S/D轮换), Tom→4(J), Ride→5(K)
+ * Tom fill: 检测连续通鼓，按高→中→低轮换音效
+ */
+static int drumTypeToTrack(int drumType, int& hihatAlt) {
+    switch (drumType) {
+        case 1: return 0;  // kick → A
+        case 2: return 3;  // snare → F
+        case 3: return 1;  // hihat → S
+        case 4: case 5: case 6: return 4;  // tom → J
+        case 7: return 5;  // ride → K
+        case 8: return 2;  // crash → D
+        default: return -1;
+    }
+}
+
+// Tom fill 轮换索引：高→中→低→高...
+static int tomFillCycle = 0;
+static long long lastTomTime = 0;
+
+/**
+ * @brief 获取tom音效索引（0=高, 1=中, 2=低）
+ * Tom fill逻辑：连续tom间隔<500ms时自动轮换，>500ms重置为高tom
+ */
+static int getTomSoundIndex(long long currentTime) {
+    if (currentTime - lastTomTime > 500) {
+        tomFillCycle = 0;  // 间隔太长，重置为高tom
+    }
+    int idx = tomFillCycle % 3;
+    tomFillCycle++;
+    lastTomTime = currentTime;
+    return idx;
+}
+
+/**
+ * @brief 优先级过滤：同一时间点最多2个音符
+ * 铁则：Kick(0) > Snare(3) > Crash > Tom(4) > Ride(5) > Hihat(1/2)
+ */
+static int getPriority(int track) {
+    switch (track) {
+        case 0: return 0;   // Kick 最高
+        case 3: return 1;   // Snare
+        case 2: return 2;   // Crash (D键，高于Tom/Ride/Hihat)
+        case 4: return 3;   // Tom
+        case 5: return 4;   // Ride
+        case 1: return 5;   // Hihat 最低
+        default: return 99;
+    }
+}
+
 std::vector<std::pair<long long, int>> SongAnalyzer::generateChart(
     const std::vector<BeatInfo>& beats, float bpm) {
     std::vector<std::pair<long long, int>> chart;
     if (beats.empty()) return chart;
 
-    srand(42); // 固定种子，保证可重现
+    int hihatAlt = 0;
     int lastTrack = -1;
-    int trackUsage[4] = {0, 0, 0, 0};
+    float beatInterval = 60000.0f / bpm;
+    float halfBeat = beatInterval / 2.0f;
 
+    // 第一步：按鼓组类型分配轨道
+    srand(42);
     for (size_t i = 0; i < beats.size(); i++) {
-        int noteCount;
-        // 重音拍：1-2个音符；普通拍：0-1个
-        if (beats[i].isAccent) {
-            noteCount = 1 + (rand() % 2); // 1或2
-        } else {
-            // 普通拍：60%概率出音符，避免太密
-            noteCount = (rand() % 100 < 60) ? 1 : 0;
+        int track = drumTypeToTrack(beats[i].drumType, hihatAlt);
+        if (track < 0) {
+            do { track = rand() % 6; } while (track == lastTrack);
         }
-
-        if (noteCount == 0) continue;
-
-        // 选择轨道：避免连续相同，均衡使用
-        int track;
-        int attempts = 0;
-        do {
-            int totalUsed = trackUsage[0] + trackUsage[1] + trackUsage[2] + trackUsage[3];
-            if (totalUsed == 0) {
-                track = rand() % 4;
-            } else {
-                float weights[4], totalWeight = 0;
-                for (int t = 0; t < 4; t++) {
-                    weights[t] = (float)(totalUsed + 4) - trackUsage[t];
-                    totalWeight += weights[t];
-                }
-                float r = (rand() / (float)RAND_MAX) * totalWeight;
-                float cumulative = 0;
-                track = 3;
-                for (int t = 0; t < 4; t++) {
-                    cumulative += weights[t];
-                    if (r <= cumulative) { track = t; break; }
-                }
-            }
-            attempts++;
-        } while (track == lastTrack && attempts < 10);
-
         lastTrack = track;
-        trackUsage[track]++;
         chart.push_back({beats[i].timeMs, track});
-
-        // 第二个音符（重音拍时）
-        if (noteCount >= 2) {
-            int track2;
-            do { track2 = rand() % 4; } while (track2 == track);
-            chart.push_back({beats[i].timeMs, track2});
-            trackUsage[track2]++;
-        }
     }
 
-    // 按时间排序
+    // 第二步：节奏子填充（off-beat hihat, crash, tom fill）
+    std::sort(chart.begin(), chart.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+    
+    std::set<long long> occupied;
+    for (auto& c : chart) occupied.insert(c.first);
+    
+    long long lastTime = chart.back().first;
+    std::vector<std::pair<long long, int>> extras;
+    
+    long long nBeats = (long long)(lastTime / beatInterval) + 1;
+    for (long long bi = 0; bi < nBeats; bi++) {
+        long long t = (long long)(bi * beatInterval);
+        
+        // Off-beat Hihat (.5位置，跳过前8拍让音乐先展开)
+        if (bi >= 8) {
+            long long offBeat = t + (long long)halfBeat;
+            if (offBeat <= lastTime && occupied.count(offBeat) == 0) {
+                extras.push_back({offBeat, 1});
+                occupied.insert(offBeat);
+            }
+        }
+        
+        // Crash every 32 beats（跳过前32拍，降低密度）
+        if (bi >= 32 && bi % 32 == 0 && occupied.count(t) == 0) {
+            extras.push_back({t, 2});
+            occupied.insert(t);
+        }
+        
+    }
+    
+    // 建立每拍能量分布
+    std::map<long long, float> beatEnergy;
+    for (auto& b : beats) {
+        long long bt = (b.timeMs / (long long)beatInterval) * (long long)beatInterval;
+        beatEnergy[bt] = std::max(beatEnergy[bt], b.energy);
+    }
+
+    // === Tom fill: 分段均匀分布（每段1个，避开Crash，能量选点） ===
+    {
+        long long fillSpacing = (long long)(beatInterval / 4.0f);
+        int numSegments = 6;  // 6段 → 6个tom fill
+        long long segLength = lastTime / numSegments;
+        long long minFillGap = (long long)(24.0f * beatInterval);  // 段内最小间隔
+        
+        for (int seg = 1; seg < numSegments; seg++) {  // 跳过分段0（开头段）
+            long long segStart = seg * segLength;
+            long long segEnd = segStart + segLength;
+            
+            // 段内找最佳位置：有能量峰值的拍，避开Crash和开头
+            long long bestT = 0;
+            float bestEnergy = -1.0f;
+            
+            for (long long bi = 0; bi < nBeats; bi++) {
+                long long t = (long long)(bi * beatInterval);
+                if (t < segStart || t >= segEnd) continue;
+                // 避开Crash及其附近（±4拍内）
+                int mod32 = (int)(bi % 32);
+                if (mod32 == 0 || mod32 == 1 || mod32 == 31 || mod32 == 30) continue;
+                if (t - segStart < (long long)(4.0f * beatInterval)) continue;  // 不过早
+                
+                // 看这个拍子附近的平均能量
+                float sum = 0; int cnt = 0;
+                for (int d = -2; d <= 2; d++) {
+                    long long bt = (long long)((bi + d) * beatInterval);
+                    auto it = beatEnergy.find(bt);
+                    if (it != beatEnergy.end()) { sum += it->second; cnt++; }
+                }
+                if (cnt > 0 && sum / cnt > bestEnergy) {
+                    bestEnergy = sum / cnt;
+                    bestT = t;
+                }
+            }
+            
+            if (bestT > 0) {
+                for (int ti = 0; ti < 3; ti++) {
+                    long long fillTime = bestT + ti * fillSpacing;
+                    if (fillTime <= lastTime) {
+                        extras.push_back({fillTime, 4});
+                    }
+                }
+            }
+        }
+        
+        // 兜底：如果某段没放fill，在中点补
+        {
+            int fillsPlaced = 0;
+            for (int seg = 1; seg < numSegments && fillsPlaced < 4; seg++) {
+                long long segStart = seg * segLength;
+                long long segEnd = segStart + segLength;
+                // 检查此段是否已有tom fill
+                bool hasFill = false;
+                for (auto& e : extras) {
+                    if (e.second == 4 && e.first >= segStart && e.first < segEnd) {
+                        hasFill = true; break;
+                    }
+                }
+                if (hasFill) continue;
+                long long t = segStart + segLength / 2;
+                t = (t / (long long)beatInterval) * (long long)beatInterval;
+                if (t + 2 * fillSpacing > lastTime) continue;
+                for (int ti = 0; ti < 3; ti++) {
+                    extras.push_back({t + ti * fillSpacing, 4});
+                }
+                fillsPlaced++;
+            }
+        }
+    }
+    
+    chart.insert(chart.end(), extras.begin(), extras.end());
     std::sort(chart.begin(), chart.end(),
               [](const auto& a, const auto& b) { return a.first < b.first; });
 
-    // 确保同一时间不超过2个音符
+    // 第三步：优先级过滤（同一时间最多3个）
     std::vector<std::pair<long long, int>> filtered;
-    int sameTimeCount = 0;
-    long long lastTime = -1;
-    for (const auto& note : chart) {
-        if (note.first != lastTime) {
-            sameTimeCount = 0;
-            lastTime = note.first;
+    size_t i = 0;
+    while (i < chart.size()) {
+        long long t = chart[i].first;
+        std::vector<int> tracks;
+        while (i < chart.size() && chart[i].first == t) {
+            tracks.push_back(chart[i].second);
+            i++;
         }
-        sameTimeCount++;
-        if (sameTimeCount <= 2) {
-            filtered.push_back(note);
+        std::sort(tracks.begin(), tracks.end(),
+                  [](int a, int b) { return getPriority(a) < getPriority(b); });
+        int count = std::min((int)tracks.size(), 3);
+        for (int j = 0; j < count; j++) {
+            filtered.push_back({t, tracks[j]});
         }
     }
-
     return filtered;
 }
 
+// ========== 点3拍校准
 // ========== 点3拍校准 ==========
 
 float SongAnalyzer::tapTempo(long long tapTimeMs) {
@@ -857,3 +1035,4 @@ std::string SongAnalyzer::getFileNameWithoutExt(const std::string& filePath) {
     if (lastDot != std::string::npos) name = name.substr(0, lastDot);
     return name;
 }
+

@@ -92,18 +92,31 @@ private:
     static std::vector<int16_t> generateHihat(float duration, int sampleRate, float volume);
     static std::vector<int16_t> generateTom(float freq, float duration, int sampleRate, float volume);
     int soundPack = 0; // 0=叮咚 1=打击乐
+    std::string m_resourceDir; // 资源目录（exeDir）
     // V3.5: 4轨道独立鼓声音效
-    sf::SoundBuffer trackBuffers[4];
-    std::unique_ptr<sf::Sound> trackSounds[4];
+    sf::SoundBuffer trackBuffers[6];
+    std::unique_ptr<sf::Sound> trackSounds[6];
+    // V3.6: 通鼓循环系统（高中低3个通鼓共用J键，算法自动轮换）
+    sf::SoundBuffer tomBuffers[3];
+    std::unique_ptr<sf::Sound> tomSounds[3];
+    int tomCycleIndex = 0; // 通鼓轮换索引 0=高 1=中 2=低
+    long long lastTomHitTime = 0;  // 上次tom时间，>500ms重置轮换
+    // V3.6: Ride镲
+    sf::SoundBuffer rideBuffer;
+    std::unique_ptr<sf::Sound> rideSound;
     bool loadBuffer(sf::SoundBuffer& buffer, const std::vector<int16_t>& data);
     bool generateBGM();
     bool generateSFX();
+    // 尝试从文件加载打击乐采样
+    bool loadPercussionFromFile(sf::SoundBuffer& buf, std::unique_ptr<sf::Sound>& snd,
+                                 const char* filename, float volume);
 
 public:
     AudioManager();
     ~AudioManager() = default;
 
     bool init();
+    void setResourceDir(const std::string& dir) { m_resourceDir = dir; }
     void playBGM();
     void pauseBGM();  // 暂停BGM
     void resumeBGM(); // 恢复BGM
@@ -121,6 +134,11 @@ public:
         if (hitSound) hitSound->setVolume(m_effectVolume * 100.0f);
         if (perfectSound) perfectSound->setVolume(m_effectVolume * 100.0f);
         if (missSound) missSound->setVolume(m_effectVolume * 100.0f);
+        for (int i = 0; i < 6; i++)
+            if (trackSounds[i]) trackSounds[i]->setVolume(m_effectVolume * 100.0f);
+        for (int i = 0; i < 3; i++)
+            if (tomSounds[i]) tomSounds[i]->setVolume(m_effectVolume * 100.0f);
+        if (rideSound) rideSound->setVolume(m_effectVolume * 100.0f);
     }
 
     float getMusicVolume() const { return m_musicVolume; }
@@ -136,6 +154,10 @@ public:
      */
     void playHit(bool isPerfect, int track = -1);
     void playMiss();
+    // V3.6: 通鼓自动轮换播放（高中低）
+    void playTom();
+    // V3.6: Ride镲播放
+    void playRide();
 
     /**
      * @brief 生成与谱面节奏同步的BGM

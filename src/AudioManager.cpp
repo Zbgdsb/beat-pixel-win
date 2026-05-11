@@ -1,3 +1,4 @@
+#include <chrono>
 /**
  * @file AudioManager.cpp
  * @brief 音频管理类实现
@@ -19,11 +20,13 @@ static const float BGM_VOLUME = 0.20f;
 static const float SFX_VOLUME = 0.5f;
 
 // 轨道对应音高（C大调和弦音，每个轨道不同音高增加层次感）
-static const float TRACK_PITCHES[4] = {
+static const float TRACK_PITCHES[6] = {
     261.63f,  // C4 - 轨道0
     329.63f,  // E4 - 轨道1
     392.00f,  // G4 - 轨道2
-    523.25f   // C5 - 轨道3
+    523.25f,  // C5 - 轨道3
+    440.00f,  // A4 - 轨道4 (Tom)
+    587.33f   // D5 - 轨道5 (Ride)
 };
 
 AudioManager::AudioManager() : bgmLoaded(false), sfxLoaded(false) {
@@ -151,7 +154,7 @@ bool AudioManager::generateSyncedBGM(const std::vector<std::pair<long long, int>
     float noteDuration = 0.15f;
 
     for (const auto& [timeMs, trackId] : noteData) {
-        int track = (trackId >= 0 && trackId < 4) ? trackId : 0;
+        int track = (trackId >= 0 && trackId < 6) ? trackId : 0;
         float freq = TRACK_PITCHES[track];
 
         // 计算该音符在PCM数据中的起始位置
@@ -212,41 +215,113 @@ bool AudioManager::generateBGM() {
     return true;
 }
 
+// V3.6: 从文件加载打击乐采样（支持多路径fallback）
+bool AudioManager::loadPercussionFromFile(sf::SoundBuffer& buf, std::unique_ptr<sf::Sound>& snd,
+                                           const char* filename, float volume) {
+    std::vector<std::string> searchDirs = {
+        "assets/sounds",
+        "../assets/sounds",
+    };
+    if (!m_resourceDir.empty()) {
+        searchDirs.push_back(m_resourceDir + "/assets/sounds");
+        searchDirs.push_back(m_resourceDir + "/../assets/sounds");
+    }
+    for (const auto& dir : searchDirs) {
+        std::string path = dir + "/" + filename;
+        if (buf.loadFromFile(path)) {
+            snd = std::make_unique<sf::Sound>(buf);
+            snd->setVolume(m_effectVolume * volume * 100.0f);
+            printf("[SFX] loaded %s from %s (%llu samples)\n", filename, path.c_str(),
+                   (unsigned long long)buf.getSampleCount()); fflush(stdout);
+            return true;
+        }
+    }
+    return false;
+}
+
+// V3.6: 通鼓自动轮换播放（高→中→低循环，模拟真实鼓手手法）
+void AudioManager::playTom() {
+    long long now = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    // Tom Fill 联动：间隔<500ms自动轮换(高→中→低→高)，否则重置为高Tom
+    if (now - lastTomHitTime > 500) {
+        tomCycleIndex = 0;  // 独立Tom，重置为高
+    }
+    lastTomHitTime = now;
+    
+    if (tomSounds[tomCycleIndex]) {
+        tomSounds[tomCycleIndex]->stop();
+        tomSounds[tomCycleIndex]->play();
+    }
+    tomCycleIndex = (tomCycleIndex + 1) % 3;
+}
+
+// V3.6: Ride镲播放
+void AudioManager::playRide() {
+    if (rideSound) {
+        rideSound->stop();
+        rideSound->play();
+    }
+}
+
 bool AudioManager::generateSFX() {
     if (soundPack == 1) {
-        // 打击乐音效包 - 4轨道独立鼓声
-        // Track 0 (A): Kick 底鼓
-        auto kickData = generateKick(0.15f, SAMPLE_RATE, SFX_VOLUME * 0.9f);
-        if (!loadBuffer(trackBuffers[0], kickData)) return false;
-        trackSounds[0] = std::make_unique<sf::Sound>(trackBuffers[0]);
-        printf("[SFX] kick samples=%zu\n", kickData.size()); fflush(stdout);
+        // 打击乐音效包 - 6轨道真实采样
+        // 轨道映射: 0=kick, 1=hihat, 2=hihat, 3=snare, 4=tom(占位), 5=ride(占位)
+        struct SfxEntry { const char* filename; int track; float volume; };
+        SfxEntry entries[] = {
+            {"kick.wav",   0, 0.9f},
+            {"hihat.wav",  1, 0.7f},
+            {"crash.wav",  2, 0.85f},
+            {"snare.wav",  3, 0.85f},
+        };
+        for (auto& e : entries) {
+            if (!loadPercussionFromFile(trackBuffers[e.track], trackSounds[e.track],
+                                         e.filename, e.volume)) {
+                printf("[SFX] WARN: %s not found, using synthetic fallback\n", e.filename); fflush(stdout);
+                std::vector<int16_t> data;
+                switch (e.track) {
+                    case 0: data = generateKick(0.15f, SAMPLE_RATE, SFX_VOLUME * e.volume); break;
+                    case 1: case 2: data = generateHihat(0.06f, SAMPLE_RATE, SFX_VOLUME * e.volume); break;
+                    case 3: data = generateSnare(0.12f, SAMPLE_RATE, SFX_VOLUME * e.volume); break;
+                }
+                if (!loadBuffer(trackBuffers[e.track], data)) return false;
+                trackSounds[e.track] = std::make_unique<sf::Sound>(trackBuffers[e.track]);
+                trackSounds[e.track]->setVolume(m_effectVolume * e.volume * 100.0f);
+            }
+        }
 
-        // Track 1 (S): Snare 军鼓
-        auto snareData = generateSnare(0.12f, SAMPLE_RATE, SFX_VOLUME * 0.85f);
-        if (!loadBuffer(trackBuffers[1], snareData)) return false;
-        trackSounds[1] = std::make_unique<sf::Sound>(trackBuffers[1]);
-        printf("[SFX] snare samples=%zu\n", snareData.size()); fflush(stdout);
+        // V3.6: 通鼓（3个）加载到tomBuffers
+        const char* tomFiles[] = {"tom_hi.wav", "tom_mid.wav", "tom_lo.wav"};
+        for (int i = 0; i < 3; i++) {
+            if (!loadPercussionFromFile(tomBuffers[i], tomSounds[i], tomFiles[i], 0.8f)) {
+                float freqs[] = {400.0f, 300.0f, 200.0f};
+                auto data = generateTom(freqs[i], 0.15f, SAMPLE_RATE, SFX_VOLUME * 0.8f);
+                if (!loadBuffer(tomBuffers[i], data)) return false;
+                tomSounds[i] = std::make_unique<sf::Sound>(tomBuffers[i]);
+                tomSounds[i]->setVolume(m_effectVolume * 0.8f * 100.0f);
+            }
+        }
+        tomCycleIndex = 0;
 
-        // Track 2 (D): Hi-hat 踩镲
-        auto hihatData = generateHihat(0.06f, SAMPLE_RATE, SFX_VOLUME * 0.7f);
-        if (!loadBuffer(trackBuffers[2], hihatData)) return false;
-        trackSounds[2] = std::make_unique<sf::Sound>(trackBuffers[2]);
-        printf("[SFX] hihat samples=%zu\n", hihatData.size()); fflush(stdout);
-
-        // Track 3 (F): Tom 嗵鼓
-        auto tomData = generateTom(250.0f, 0.13f, SAMPLE_RATE, SFX_VOLUME * 0.8f);
-        if (!loadBuffer(trackBuffers[3], tomData)) return false;
-        trackSounds[3] = std::make_unique<sf::Sound>(trackBuffers[3]);
-        printf("[SFX] tom samples=%zu\n", tomData.size()); fflush(stdout);
+        // V3.6: Ride镲
+        if (!loadPercussionFromFile(rideBuffer, rideSound, "ride.wav", 0.75f)) {
+            auto data = generateHihat(0.12f, SAMPLE_RATE, SFX_VOLUME * 0.75f);
+            if (!loadBuffer(rideBuffer, data)) return false;
+            rideSound = std::make_unique<sf::Sound>(rideBuffer);
+            rideSound->setVolume(m_effectVolume * 0.75f * 100.0f);
+        }
 
         // Perfect/Miss保留作为通用音效
         auto perfectData = generateSnare(0.10f, SAMPLE_RATE, SFX_VOLUME * 0.95f);
         if (!loadBuffer(perfectBuffer, perfectData)) return false;
         perfectSound = std::make_unique<sf::Sound>(perfectBuffer);
+        perfectSound->setVolume(m_effectVolume * 100.0f);
 
         auto missData = generateHihat(0.05f, SAMPLE_RATE, SFX_VOLUME * 0.4f);
         if (!loadBuffer(missBuffer, missData)) return false;
         missSound = std::make_unique<sf::Sound>(missBuffer);
+        missSound->setVolume(m_effectVolume * 100.0f);
     } else {
         // 默认叮咚音效
         auto perfectData = generateChord(523.25f, 659.25f, 0.15f, SAMPLE_RATE, SFX_VOLUME);
@@ -351,10 +426,16 @@ bool AudioManager::playOriginalSong(const std::string& filePath) {
  * @details 先stop再play，复用同一个Sound对象，避免重复创建导致卡顿
  */
 void AudioManager::playHit(bool isPerfect, int track) {
-    if (soundPack == 1 && track >= 0 && track < 4 && trackSounds[track]) {
-        // 打击乐模式：任何判定都用轨道鼓声
-        trackSounds[track]->stop();
-        trackSounds[track]->play();
+    if (soundPack == 1 && track >= 0 && track < 6) {
+        // 打击乐模式：任何判定都用对应音效
+        if (track == 4) {
+            playTom();   // V3.6: 通鼓自动轮换
+        } else if (track == 5) {
+            playRide();  // V3.6: Ride镲
+        } else if (trackSounds[track]) {
+            trackSounds[track]->stop();
+            trackSounds[track]->play();
+        }
     } else if (isPerfect && perfectSound) {
         perfectSound->stop();
         perfectSound->play();

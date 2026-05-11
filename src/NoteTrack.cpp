@@ -187,7 +187,7 @@ void NoteTrack::drawKeyButton(const TextureManager& tex, bool isPressed, float s
     // 先获取纹理引用
     const sf::Texture& keyTex = isPressed ? tex.keyPressed[trackId] : tex.keyNormal[trackId];
 
-    const float SIZE = 80.0f;
+    const float SIZE = 60.0f;
     const float SRC_W = (float)keyTex.getSize().x;  // 使用实际纹理宽度
     const float SRC_H = (float)keyTex.getSize().y;  // 使用实际纹理高度
     float baseScale = SIZE / SRC_W;  // 按宽度缩放，保持原始比例
@@ -259,8 +259,7 @@ NoteTrack::JudgeResult NoteTrack::handlePress(long long pressTime) {
         return result;
     }
 
-    // 情况3：500ms内无音符 -> 乱按
-    result.noteY = (float)judgeY; // 使用判定线位置作为后备
-    result.judgement = MISS;
+    // 情况3：500ms内无音符 -> 空按，不判MISS（避免鼓模式乱按触发miss音效）
+    result.judgement = NONE;
     return result;
 }

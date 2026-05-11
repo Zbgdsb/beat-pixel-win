@@ -553,6 +553,9 @@ inline SHORT GetAsyncKeyState(int vKey) {
     else if (vKey == 13) {
         key = sf::Keyboard::Key::Enter;
     }
+    else if (vKey == 32) {
+        key = sf::Keyboard::Key::Space;
+    }
 
     if (key != sf::Keyboard::Key::Unknown) {
         if (sf::Keyboard::isKeyPressed(key)) {

@@ -38,7 +38,8 @@ enum GameState {
     PLAYING,    // 游戏中
     PAUSED,     // V3.1: 游戏暂停
     RESULT,     // 结算界面
-    ANALYZING   // V3.2: 歌曲分析界面
+    ANALYZING,  // V3.2: 歌曲分析界面
+    TRACK_DELEGATE  // 代管轨道选择
 };
 
 /**
@@ -105,21 +106,20 @@ private:
     std::vector<MissCrossAnim> missCrossAnims;
 
     // ========== V3.0新增：按键视觉反馈 ==========
-    KeyFeedback keyFeedback[4];
+    KeyFeedback keyFeedback[6];
 
     // ========== V3.0新增：Combo断连闪烁 ==========
     float comboBreakFlash = 0.0f;   // Combo断掉时的红色闪烁剩余时间
     static constexpr float COMBO_BREAK_DURATION = 0.2f;  // 闪烁持续时间
 
     // ========== 按键状态管理 ==========
-    bool keyPressed[4] = {false, false, false, false};
-    bool keyWasPressed[4] = {false, false, false, false};
-    int keyGlowAlpha[4] = {0, 0, 0, 0};
+    bool keyPressed[6] = {false, false, false, false, false, false};
+    bool keyWasPressed[6] = {false, false, false, false, false, false};
+    int keyGlowAlpha[6] = {0, 0, 0, 0, 0, 0};
 
     // ========== 菜单状态（V2.0新增） ==========
     int menuSelection = 0;          // 菜单选项索引
     int difficultySelection = 1;    // 难度选择（默认Normal）
-    bool keyMenuWasPressed = false; // 菜单按键防重复
     bool importRequested = false;   // 是否请求导入MP3
     bool chartExportRequested = false; // V3.3: 导出谱面
     bool showAchievements = false;  // V3.3: 显示成就界面
@@ -133,6 +133,16 @@ private:
     std::vector<SongListItem> songList;
     int songListSelection = 0;     // 列表选中索引
     bool isShowingSongList = false; // 是否在歌曲列表界面
+    bool songListJustOpened = false; // 防止Enter粘滞触发Demo
+    bool settingsJustOpened = false;  // 防止Enter粘滞
+    bool analysisJustOpened = false;  // 防止Enter粘滞（分析界面）
+    bool trackDelegateJustOpened = false;  // 防止Enter/ESC粘滞（代管界面）
+    bool pauseJustOpened = false;      // 防止ESC粘滞（暂停→立即恢复）
+    bool menuJustOpened = false;        // 防止从子页面Enter返回时穿透
+    bool autoPlay = false;           // V3.7: 自动演示模式
+    bool trackAutoPlay[6] = {false}; // 代管轨道
+    int trackDelegateSel = 0;        // 代管选轨光标
+    float mouseX = 0, mouseY = 0;       // 当前鼠标坐标（悬浮高亮）
     void refreshSongList();         // 扫描songs目录生成列表
 
     GameState gameState;
@@ -177,11 +187,8 @@ private:
     std::string configFilePath;           // 配置文件完整路径
 
     // ========== V3.1: 按键自定义 ==========
-    int customKeys[4] = {  // 自定义按键，存储虚拟键码，默认A/S/D/F
-        'A', 
-        'S', 
-        'D', 
-        'F'
+    int customKeys[6] = {  // 自定义按键，存储虚拟键码，默认A/S/D/F/J/K
+        'A', 'S', 'D', 'F', 'J', 'K'
     };
     int currentKeySettingIndex = -1; // 正在设置的按键索引，-1表示未在设置
     bool keySettingWaitingRelease = false; // 等待按键松开标志
@@ -191,11 +198,11 @@ private:
     std::vector<std::pair<long long, int>> noteTimeData;
     long long lastNoteTime;
 
-    static const int TRACK_COUNT = 4;
-    static const int TRACK_WIDTH = 100;
+    static const int TRACK_COUNT = 6;
+    static const int TRACK_WIDTH = 70;
     static const int JUDGE_Y = 500;
-    static const char TRACK_KEYS[4];
-    static const COLORREF TRACK_COLORS[4];
+    static const char TRACK_KEYS[6];
+    static const COLORREF TRACK_COLORS[6];
 
     // 难度对应的下落速度
     static const double DIFFICULTY_SPEEDS[3];
@@ -206,6 +213,7 @@ private:
     void handleInput();
     void handleResultInput();
     void handleMenuInput();
+    void handleTrackDelegateInput();
     void update();
     void updateAnimations();
     void spawnHitAnim(int trackId, float noteY, Judgement j);
@@ -234,11 +242,13 @@ private:
     void drawAchievementsScreen(); // V3.3: 成就界面
     void handleAchievementsInput(); // V3.3: 成就界面输入
     void drawSongListScreen();     // V3.4: 歌曲列表界面
+    void drawTrackDelegateScreen();// 代管轨道选择界面
     void handleSongListInput();    // V3.4: 歌曲列表输入
     void drawAchievementPopups(); // V3.3: 成就弹窗绘制
     void updateAchievementPopups(float dt);
     std::string getFileNameWithoutExt(const std::string& filePath);
     void loadSongForPlaying();   // V3.2: 加载歌曲进入游戏
+    void startDelegatedGame();   // 代管确认后启动游戏
     void loadConfig(const std::string& path = "config.ini"); // 加载本地配置
     void saveConfig();           // 保存本地配置
     void startAnalysis();        // V3.2: 开始分析歌曲

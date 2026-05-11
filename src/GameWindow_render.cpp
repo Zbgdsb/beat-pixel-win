@@ -38,7 +38,7 @@ void GameWindow::drawMenuScreen() {
 
     settextcolor(RGB(titleR, titleG, titleB));
     settextstyle(48, 0, "Consolas");
-    const char* title = "BEAT PIXEL";
+    const char* title = "节拍像素";
     int titleW = textwidth(title);
     outtextxy((width - titleW) / 2, 60, title);
 
@@ -52,43 +52,57 @@ void GameWindow::drawMenuScreen() {
     // 副标题
     settextcolor(RGB(140, 140, 170));
     settextstyle(16, 0, "Consolas");
-    const char* subtitle = "4-Key Rhythm Game";
+    const char* subtitle = "6键节奏游戏";
     int subW = textwidth(subtitle);
     outtextxy((width - subW) / 2, 125, subtitle);
 
     // 菜单选项
     const char* menuItems[] = {
-        "Song List",
-        "Import MP3",
-        "Import Chart",
-        "Achievements",
-        "Settings",
-        "Difficulty: Normal",
-        "Exit"
+        "歌曲列表",
+        "成就",
+        "设置",
+        "难度: 普通",
+        "退出"
     };
     char diffStr[64];
-    snprintf(diffStr, sizeof(diffStr), "Difficulty: %s", getDifficultyName());
-    menuItems[5] = diffStr;
+    snprintf(diffStr, sizeof(diffStr), "难度: %s", getDifficultyName());
+    menuItems[3] = diffStr;
 
     int menuY = 170;
     int itemH = 48;
 
-    for (int i = 0; i < 7; i++) {
+    float menuItemX = (float)((width - 300) / 2);
+    float menuItemW = 300.0f;
+    for (int i = 0; i < 5; i++) {
         int y = menuY + i * itemH;
+        
+        // 悬浮检测
+        bool hovered = (mouseX >= menuItemX && mouseX <= menuItemX + menuItemW &&
+                        mouseY >= y - 5 && mouseY <= y + 35);
 
-        if (i == menuSelection) {
-            // 选中项：渐变高亮底板
-            sf::RectangleShape highlight({300.0f, 40.0f});
-            highlight.setPosition({(float)((width - 300) / 2), (float)(y - 5)});
+        if (hovered) {
+            // 悬浮高亮 + 自动选中
+            menuSelection = i;
+            sf::RectangleShape highlight({menuItemW, 40.0f});
+            highlight.setPosition({menuItemX, (float)(y - 5)});
             highlight.setFillColor(sf::Color(0, 180, 180, 40));
             highlight.setOutlineColor(sf::Color(0, 220, 220, 120));
             highlight.setOutlineThickness(1.0f);
             g_window->draw(highlight);
 
-            // 左侧指示三角
             settextcolor(RGB(0, 255, 255));
             settextstyle(22, 0, "Consolas");
-            outtextxy((width - 300) / 2 + 10, y + 2, ">");
+            outtextxy((int)(menuItemX + 10), y + 2, ">");
+
+            settextcolor(RGB(255, 255, 255));
+        } else if (i == menuSelection) {
+            // 选中项（键盘选中，鼠标不在上面）
+            sf::RectangleShape highlight({menuItemW, 40.0f});
+            highlight.setPosition({menuItemX, (float)(y - 5)});
+            highlight.setFillColor(sf::Color(0, 120, 120, 25));
+            highlight.setOutlineColor(sf::Color(0, 160, 160, 80));
+            highlight.setOutlineThickness(1.0f);
+            g_window->draw(highlight);
 
             settextcolor(RGB(255, 255, 255));
         } else {
@@ -97,16 +111,16 @@ void GameWindow::drawMenuScreen() {
 
         settextstyle(22, 0, "Consolas");
         int itemW = textwidth(menuItems[i]);
-        outtextxy((width - itemW) / 2 + 15, y + 3, menuItems[i]);
+        outtextxy((width - itemW) / 2, y + 3, menuItems[i]);
     }
 
     // 排行榜预览（放在菜单下方）
-    int highScore = dataManager.getHighScore("Demo Song", (int)currentDifficulty);
+    int highScore = dataManager.getHighScore("示例歌曲", (int)currentDifficulty);
     if (highScore > 0) {
         settextcolor(RGB(255, 215, 0));
         settextstyle(14, 0, "Consolas");
         char lbStr[128];
-        snprintf(lbStr, sizeof(lbStr), "Demo Song Best: %d", highScore);
+        snprintf(lbStr, sizeof(lbStr), "示例最佳: %d", highScore);
         int lbW = textwidth(lbStr);
         outtextxy((width - lbW) / 2, 530, lbStr);
     }
@@ -114,8 +128,8 @@ void GameWindow::drawMenuScreen() {
     // 底部提示
     settextcolor(RGB(70, 70, 90));
     settextstyle(13, 0, "Consolas");
-    const char* hint1 = "W/S: Select  |  ENTER: Confirm";
-    const char* hint2 = "MP3 files -> songs/ folder";
+    const char* hint1 = "W/S: 选择  |  回车: 确认";
+    const char* hint2 = "MP3文件放入 songs/ 文件夹";
     outtextxy((width - textwidth(hint1)) / 2, height - 55, hint1);
     outtextxy((width - textwidth(hint2)) / 2, height - 35, hint2);
 
@@ -247,6 +261,9 @@ void GameWindow::render() {
         drawProgressBar();
         // 叠加暂停界面
         drawPauseScreen();
+    } else if (gameState == TRACK_DELEGATE) {
+        cleardevice();
+        drawTrackDelegateScreen();
     } else if (gameState == RESULT) {
         cleardevice();
         drawResultScreen();
@@ -348,7 +365,7 @@ void GameWindow::drawBPMIndicator() {
     bpmPulseScale = pulseScale;
 
     float panelX = 10.0f;
-    float panelY = 72.0f;
+    float panelY = 85.0f;
     float panelW = 130.0f;
     float panelH = 42.0f;
 
@@ -426,7 +443,7 @@ void GameWindow::drawNotePreviewBar() {
         g_window->draw(divider);
     }
 
-    // "NOW" 标记线
+    // "当前" 标记线
     sf::RectangleShape nowLine({2.0f, (float)barH});
     nowLine.setPosition({(float)barX, (float)barY});
     nowLine.setFillColor(sf::Color(0, 255, 200, 180));
@@ -484,7 +501,7 @@ void GameWindow::drawNotePreviewBar() {
     // 标签
     settextcolor(RGB(120, 120, 120));
     settextstyle(9, 0, "Consolas");
-    outtextxy(barX + 5, barY + 2, "PREVIEW");
+    outtextxy(barX + 5, barY + 2, "预览");
 }
 
 // ========== V3.0: 判定粒子特效绘制 ==========
@@ -704,8 +721,15 @@ void GameWindow::drawUI() {
     }
     settextstyle(12, 0, "Consolas");
     char offsetStr[64];
-    snprintf(offsetStr, sizeof(offsetStr), "Offset: %.0fms  [F1:-10ms  F2:+10ms]", gameOffsetMs);
+    snprintf(offsetStr, sizeof(offsetStr), "偏移: %.0fms  [F1:-10ms  F2:+10ms]", gameOffsetMs);
     outtextxy(20, 63, offsetStr);
+
+    // V3.7: 自动演示模式指示
+    if (autoPlay) {
+        settextcolor(RGB(0, 255, 100));
+        settextstyle(14, 0, "Consolas");
+        outtextxy(20, 135, "[自动演示 - P键切换]");
+    }
 
     // --- 右上角：Combo面板 ---
     // V3.0: Combo断连红色闪烁
@@ -817,7 +841,7 @@ void GameWindow::drawUI() {
     // 操作提示
     settextcolor(RGB(100, 100, 100));
     settextstyle(12, 0, "Consolas");
-    outtextxy(20, height - 28, "ESC: Menu  |  A S D F");
+    outtextxy(20, height - 28, "ESC: 菜单  |  A S D F");
 }
 
 // ========== 结算界面（V3.1新版：带准确率、评级、Full Combo/All Perfect标记） ==========
@@ -871,7 +895,7 @@ void GameWindow::drawResultScreen() {
 
     settextcolor(RGB(200, 160, 0));
     settextstyle(20, 0, "Consolas");
-    const char* scoreLabel = "Final Score";
+    const char* scoreLabel = "最终得分";
     int labelW = textwidth(scoreLabel);
     outtextxy((int)(panelX + (panelW - labelW) / 2), (int)(panelY + 170), scoreLabel);
 
@@ -879,7 +903,7 @@ void GameWindow::drawResultScreen() {
     settextstyle(24, 0, "Consolas");
     settextcolor(RGB(255, 215, 0));
     char maxComboStr[32];
-    snprintf(maxComboStr, sizeof(maxComboStr), "Max Combo: %d", scoreSystem.getMaxCombo());
+    snprintf(maxComboStr, sizeof(maxComboStr), "最大连击: %d", scoreSystem.getMaxCombo());
     int maxComboW = textwidth(maxComboStr);
     outtextxy((int)(panelX + (panelW - maxComboW) / 2), (int)(panelY + 205), maxComboStr);
 
@@ -926,7 +950,7 @@ void GameWindow::drawResultScreen() {
 
     settextcolor(RGB(150, 150, 150));
     settextstyle(16, 0, "Consolas");
-    const char* accLabel = "Accuracy";
+    const char* accLabel = "准确率";
     int accLabelW = textwidth(accLabel);
     outtextxy((int)(panelX + 320 + accW / 2 - accLabelW / 2), (int)(panelY + 300), accLabel);
 
@@ -938,17 +962,17 @@ void GameWindow::drawResultScreen() {
 
     settextcolor(RGB(255, 215, 0));
     char perfectStr[64];
-    snprintf(perfectStr, sizeof(perfectStr), "Perfect:  %d", perfect);
+    snprintf(perfectStr, sizeof(perfectStr), "完美:  %d", perfect);
     outtextxy(statsX, statsY, perfectStr);
 
     settextcolor(RGB(100, 255, 100));
     char goodStr[64];
-    snprintf(goodStr, sizeof(goodStr), "Good:     %d", good);
+    snprintf(goodStr, sizeof(goodStr), "良好:  %d", good);
     outtextxy(statsX, statsY + lineH, goodStr);
 
     settextcolor(RGB(255, 80, 80));
     char missStr[64];
-    snprintf(missStr, sizeof(missStr), "Miss:     %d", miss);
+    snprintf(missStr, sizeof(missStr), "失误:  %d", miss);
     outtextxy(statsX, statsY + lineH * 2, missStr);
 
     // 特殊标记：Full Combo / All Perfect
@@ -959,7 +983,7 @@ void GameWindow::drawResultScreen() {
     if (allPerfect) {
         settextcolor(RGB(255, 215, 0));
         settextstyle(24, 0, "Consolas");
-        const char* apBadge = "🏆 All Perfect";
+        const char* apBadge = "🏆 全完美";
         int apW = textwidth(apBadge);
         outtextxy((int)(panelX + panelW - apW - 40), badgeY, apBadge);
         badgeY += lineH + 5;
@@ -968,7 +992,7 @@ void GameWindow::drawResultScreen() {
     if (fullCombo && !allPerfect) {
         settextcolor(RGB(255, 215, 0));
         settextstyle(24, 0, "Consolas");
-        const char* fcBadge = "⭐ Full Combo";
+        const char* fcBadge = "⭐ 全连击";
         int fcW = textwidth(fcBadge);
         outtextxy((int)(panelX + panelW - fcW - 40), badgeY, fcBadge);
     }
@@ -977,7 +1001,7 @@ void GameWindow::drawResultScreen() {
     int lbY = (int)(panelY + 430);
     settextcolor(RGB(0, 255, 255));
     settextstyle(16, 0, "Consolas");
-    const char* lbTitle = "--- Leaderboard ---";
+    const char* lbTitle = "--- 排行榜 ---";
     int lbTitleW = textwidth(lbTitle);
     outtextxy((int)(panelX + (panelW - lbTitleW) / 2), lbY, lbTitle);
 
@@ -999,7 +1023,7 @@ void GameWindow::drawResultScreen() {
     if (leaderboard.empty()) {
         settextcolor(RGB(100, 100, 100));
         settextstyle(14, 0, "Consolas");
-        const char* noData = "No records yet";
+        const char* noData = "暂无记录";
         int noDataW = textwidth(noData);
         outtextxy((int)(panelX + (panelW - noDataW) / 2), entryY, noData);
     }
@@ -1043,7 +1067,7 @@ void GameWindow::drawResultScreen() {
     // 提示
     settextcolor(RGB(120, 120, 120));
     settextstyle(14, 0, "Consolas");
-    const char* hint1 = "W/S Switch | ENTER Confirm";
+    const char* hint1 = "W/S: 切换  |  回车: 确认";
     int hintW = textwidth(hint1);
     outtextxy((int)(panelX + (panelW - hintW) / 2), (int)(panelY + panelH - 25), hint1);
 }
@@ -1062,7 +1086,7 @@ void GameWindow::drawSettingsScreen() {
 
     // 主面板
     float panelW = 500.0f;
-    float panelH = 500.0f;
+    float panelH = 620.0f;
     float panelX = (width - panelW) / 2.0f;
     float panelY = (height - panelH) / 2.0f;
 
@@ -1076,31 +1100,35 @@ void GameWindow::drawSettingsScreen() {
     // 标题
     settextcolor(RGB(100, 200, 255));
     settextstyle(40, 0, "Consolas");
-    const char* title = "Settings";
+    const char* title = "设置";
     int titleW = textwidth(title);
     outtextxy((int)(panelX + (panelW - titleW) / 2), (int)(panelY + 30), title);
 
     // 设置选项
     const char* optionNames[] = {
-        "Music Volume",
-        "Effect Volume",
-        "Sound Pack",
-        "Key 1 (Track 1)",
-        "Key 2 (Track 2)",
-        "Key 3 (Track 3)",
-        "Key 4 (Track 4)",
-        "Reset to Default Keys",
-        "Save & Back to Menu"
+        "音乐音量",
+        "音效音量",
+        "音效包",
+        "按键1 (A - 底鼓)",
+        "按键2 (S - 踩镲)",
+        "按键3 (D - 吊镲)",
+        "按键4 (F - 军鼓)",
+        "按键5 (J - 通鼓)",
+        "按键6 (K - 叮镲)",
+        "恢复默认按键",
+        "保存并返回"
     };
 
     COLORREF optionTextColors[] = {
         RGB(200, 200, 255),
         RGB(200, 255, 200),
         RGB(255, 200, 200),
-        RGB(255, 220, 100),
-        RGB(255, 220, 100),
-        RGB(255, 220, 100),
-        RGB(255, 220, 100),
+        RGB(0, 255, 255),    // Key1 A=Kick 青色
+        RGB(255, 100, 100),  // Key2 S=Hi-hat 红色
+        RGB(100, 255, 100),  // Key3 D=Crash 绿色
+        RGB(255, 255, 100),  // Key4 F=Snare 黄色
+        RGB(255, 150, 50),
+        RGB(200, 100, 255),
         RGB(255, 150, 150),
         RGB(255, 200, 100)
     };
@@ -1110,20 +1138,37 @@ void GameWindow::drawSettingsScreen() {
     float barWidth = 200.0f;
     float barHeight = 15.0f;
 
-    for (int i = 0; i < 9; i++) {
+    // 检出鼠标位置用于悬停高亮
+    sf::Vector2i mousePos = sf::Mouse::getPosition(*g_window);
+    float mx = (float)mousePos.x;
+    float my = (float)mousePos.y;
+    bool mouseOverPanel = (mx >= panelX && mx <= panelX + panelW && my >= panelY && my <= panelY + panelH);
+    int hoveredItem = -1;
+
+    for (int i = 0; i < 11; i++) {
         float currentY = optionY + i * optionH;
 
-        // 选中效果
-        if (i == settingsMenuSelection) {
+        // 鼠标悬停检测（在键盘选中前判断，避免被键盘选中覆盖）
+        float hlX = panelX + (panelW - 400.0f) / 2.0f;
+        float hlY = currentY - 5.0f;
+        bool mouseHover = mouseOverPanel && isPointInRect(mx, my, hlX, hlY, 400.0f, 35.0f);
+        if (mouseHover) hoveredItem = i;
+
+        // 选中效果（键盘选中优先，鼠标悬停为辅）
+        if (i == settingsMenuSelection || mouseHover) {
             sf::RectangleShape highlight({400.0f, 35.0f});
-            highlight.setPosition({panelX + (panelW - 400.0f) / 2.0f, currentY - 5.0f});
-            highlight.setFillColor(sf::Color(80, 80, 100, 100));
+            highlight.setPosition({hlX, hlY});
+            if (i == settingsMenuSelection) {
+                highlight.setFillColor(sf::Color(80, 80, 120, 150));
+            } else {
+                highlight.setFillColor(sf::Color(60, 60, 80, 80));
+            }
             if (i < 2) highlight.setOutlineColor(sf::Color(100, 150, 255, 200));
             else if (i == 2) highlight.setOutlineColor(sf::Color(255, 100, 100, 200));
-            else if (i < 7) highlight.setOutlineColor(sf::Color(255, 200, 100, 200));
-            else if (i == 7) highlight.setOutlineColor(sf::Color(255, 100, 100, 200));
+            else if (i < 9) highlight.setOutlineColor(sf::Color(255, 200, 100, 200));
+            else if (i == 9) highlight.setOutlineColor(sf::Color(255, 100, 100, 200));
             else highlight.setOutlineColor(sf::Color(100, 255, 100, 200));
-            highlight.setOutlineThickness(1.5f);
+            highlight.setOutlineThickness(i == settingsMenuSelection ? 1.5f : 0.8f);
             g_window->draw(highlight);
         }
 
@@ -1159,21 +1204,21 @@ void GameWindow::drawSettingsScreen() {
         }
         // 音效包选项
         else if (i == 2) {
-            const char* packNames[] = {"Ding-Dong", "Percussion"};
+            const char* packNames[] = {"叮咚", "打击乐"};
             int pack = audioManager.getSoundPack();
             settextcolor(pack == 0 ? RGB(200, 200, 255) : RGB(255, 100, 100));
             settextstyle(20, 0, "Consolas");
             outtextxy((int)(panelX + panelW - 180), (int)(currentY), packNames[pack]);
         }
-        // 按键设置（3-6选项）
-        else if (i < 7) {
+        // 按键设置（3-8选项）
+        else if (i < 9) {
             int keyIdx = i - 3;
             const char* keyName = getKeyName(customKeys[keyIdx]);
             settextcolor(currentKeySettingIndex == keyIdx ? RGB(255, 100, 100) : RGB(255, 255, 255));
             settextstyle(24, 0, "Consolas");
             const char* displayStr = keyName;
             if (currentKeySettingIndex == keyIdx) {
-                displayStr = keySettingWaitingRelease ? "[PRESS KEY]" : "[RELEASE KEYS...]";
+                displayStr = keySettingWaitingRelease ? "[请按键]" : "[请松开...]";
             }
             int displayW = textwidth(displayStr);
             outtextxy((int)(panelX + panelW - displayW - 50), (int)(currentY), displayStr);
@@ -1184,14 +1229,14 @@ void GameWindow::drawSettingsScreen() {
     if (currentKeySettingIndex >= 0) {
         settextcolor(RGB(255, 100, 100));
         settextstyle(22, 0, "Consolas");
-        const char* hint = keySettingWaitingRelease ? "Press any key to set (ESC to cancel)" : "Release all keys first...";
+        const char* hint = keySettingWaitingRelease ? "按任意键设置 (ESC取消)" : "请先松开所有按键...";
         int hintW = textwidth(hint);
         outtextxy((int)(panelX + (panelW - hintW) / 2), (int)(panelY + panelH - 60), hint);
     } else {
         // 普通提示
         settextcolor(RGB(150, 150, 170));
         settextstyle(16, 0, "Consolas");
-        const char* hint = "W/S: Select | A/D: Adjust | ENTER: Confirm";
+        const char* hint = "W/S: 选择 | A/D: 调整 | 回车: 确认";
         int hintW = textwidth(hint);
         outtextxy((int)(panelX + (panelW - hintW) / 2), (int)(panelY + panelH - 30), hint);
     }
@@ -1399,8 +1444,8 @@ void GameWindow::drawAnalysisScreen() {
     }
     contentY += tlH + 15;
 
-    // ===== 操作按钮 =====
-    const char* btnTexts[] = {"BPM", "偏移", "开始游戏", "导出", "返回"}; // 偏移、开始游戏、导出、返回
+    // ===== 操作按钮（含悬浮高亮） =====
+    const char* btnTexts[] = {"BPM", "偏移", "开始游戏", "导出", "返回"};
     COLORREF btnColors[] = {
         RGB(255, 200, 80), RGB(255, 200, 80),
         RGB(100, 255, 100), RGB(100, 200, 255), RGB(255, 100, 100)
@@ -1412,12 +1457,21 @@ void GameWindow::drawAnalysisScreen() {
 
     for (int i = 0; i < 5; i++) {
         float bx = btnStartX + i * (btnW + btnSpacing);
+        bool hovered = (mouseX >= bx && mouseX <= bx + btnW &&
+                        mouseY >= btnY && mouseY <= btnY + btnH);
+        if (hovered) analysisMenuSelection = i;
+
         sf::RectangleShape btn({btnW, btnH});
         btn.setPosition({bx, btnY});
         if (i == analysisMenuSelection) {
             btn.setFillColor(sf::Color(80, 80, 100, 255));
             btn.setOutlineColor(sf::Color(
-                (btnColors[i] >> 16) & 0xFF, (btnColors[i] >> 8) & 0xFF, btnColors[i] & 0xFF, 255));
+                (btnColors[i] >> 16) & 0xFF, (btnColors[i] >> 8) & 0xFF, btnColors[i] & 0xFF, hovered ? 255 : 255));
+            btn.setOutlineThickness(hovered ? 3.0f : 2.0f);
+        } else if (hovered) {
+            btn.setFillColor(sf::Color(50, 50, 70, 230));
+            btn.setOutlineColor(sf::Color(
+                (btnColors[i] >> 16) & 0xFF, (btnColors[i] >> 8) & 0xFF, btnColors[i] & 0xFF, 180));
             btn.setOutlineThickness(2.0f);
         } else {
             btn.setFillColor(sf::Color(40, 40, 55, 200));
@@ -1426,7 +1480,7 @@ void GameWindow::drawAnalysisScreen() {
         }
         g_window->draw(btn);
 
-        settextcolor(btnColors[i]);
+        settextcolor(hovered ? btnColors[i] : btnColors[i]);
         settextstyle(14, 0, "Consolas");
         int tw = textwidth(btnTexts[i]);
         outtextxy((int)(bx + (btnW - tw) / 2), (int)(btnY + 10), btnTexts[i]);
@@ -1525,7 +1579,7 @@ void GameWindow::drawAchievementsScreen() {
     mask.setFillColor(sf::Color(0, 0, 0, 220));
     g_window->draw(mask);
 
-    float panelW = 600.0f, panelH = 500.0f;
+    float panelW = 600.0f, panelH = 620.0f;
     float panelX = (width - panelW) / 2.0f;
     float panelY = (height - panelH) / 2.0f;
 
@@ -1539,7 +1593,7 @@ void GameWindow::drawAchievementsScreen() {
     // 标题
     settextcolor(RGB(255, 215, 0));
     settextstyle(36, 0, "Consolas");
-    const char* title = "Achievements";
+    const char* title = "成就";
     int titleW = textwidth(title);
     outtextxy((int)(panelX + (panelW - titleW) / 2), (int)(panelY + 20), title);
 
@@ -1549,21 +1603,21 @@ void GameWindow::drawAchievementsScreen() {
     settextcolor(RGB(180, 180, 180));
     settextstyle(14, 0, "Consolas");
     char progStr[64];
-    snprintf(progStr, sizeof(progStr), "%d / %d unlocked", unlocked, total);
+    snprintf(progStr, sizeof(progStr), "%d / %d 已解锁", unlocked, total);
     int progW = textwidth(progStr);
     outtextxy((int)(panelX + (panelW - progW) / 2), (int)(panelY + 60), progStr);
 
     // 成就列表
     auto& all = achievementSystem.getAll();
     float itemY = panelY + 90;
-    float itemH = 38.0f;
+    float itemH = 45.0f;
 
     for (size_t i = 0; i < all.size(); i++) {
         float y = itemY + i * itemH;
         if (y + itemH > panelY + panelH - 70) break;
 
-        // 背景条
-        sf::RectangleShape row({panelW - 40, itemH - 4});
+        // 背景条（比行间距略窄以留出空隙）
+        sf::RectangleShape row({panelW - 40, itemH - 3});
         row.setPosition({panelX + 20, y});
         if (all[i].unlocked) {
             row.setFillColor(sf::Color(40, 50, 30, 200));
@@ -1582,7 +1636,7 @@ void GameWindow::drawAchievementsScreen() {
         } else {
             settextcolor(RGB(60, 60, 70));
         }
-        outtextxy((int)(panelX + 30), (int)(y + 8), all[i].icon);
+        outtextxy((int)(panelX + 30), (int)(y + 10), all[i].icon);
 
         // 名称
         if (all[i].unlocked) {
@@ -1591,7 +1645,7 @@ void GameWindow::drawAchievementsScreen() {
             settextcolor(RGB(80, 80, 100));
         }
         settextstyle(16, 0, "Consolas");
-        outtextxy((int)(panelX + 65), (int)(y + 5), all[i].name);
+        outtextxy((int)(panelX + 65), (int)(y + 4), all[i].name);
 
         // 描述
         if (all[i].unlocked) {
@@ -1607,7 +1661,7 @@ void GameWindow::drawAchievementsScreen() {
             settextcolor(RGB(120, 150, 120));
             settextstyle(11, 0, "Consolas");
             int timeW = textwidth(all[i].unlockedTime.c_str());
-            outtextxy((int)(panelX + panelW - timeW - 30), (int)(y + 12), all[i].unlockedTime.c_str());
+            outtextxy((int)(panelX + panelW - timeW - 30), (int)(y + 14), all[i].unlockedTime.c_str());
         }
     }
 
@@ -1624,14 +1678,14 @@ void GameWindow::drawAchievementsScreen() {
 
     settextcolor(RGB(255, 100, 100));
     settextstyle(20, 0, "Consolas");
-    const char* backText = "Back";
+    const char* backText = "返回";
     int backW = textwidth(backText);
     outtextxy((int)(btnX + (btnW - backW) / 2), (int)(btnY + 10), backText);
 
     // 提示
     settextcolor(RGB(100, 100, 120));
     settextstyle(12, 0, "Consolas");
-    outtextxy((int)(panelX + (panelW - textwidth("ESC/ENTER: Return")) / 2), (int)(panelY + panelH - 20), "ESC/ENTER: Return");
+    outtextxy((int)(panelX + (panelW - textwidth("ESC/回车: 返回")) / 2), (int)(panelY + panelH - 20), "ESC/回车: 返回");
 }
 
 // ========== V3.4: 歌曲列表界面 ==========
@@ -1659,7 +1713,7 @@ void GameWindow::drawSongListScreen() {
     // 标题
     settextcolor(RGB(0, 255, 200));
     settextstyle(28, 0, "Consolas");
-    const char* title = "Song List";
+    const char* title = "歌曲列表";
     int titleW = textwidth(title);
     outtextxy((int)(panelX + (panelW - titleW) / 2), (int)(panelY + 15), title);
 
@@ -1667,7 +1721,7 @@ void GameWindow::drawSongListScreen() {
     settextcolor(RGB(120, 120, 150));
     settextstyle(12, 0, "Consolas");
     char countStr[64];
-    snprintf(countStr, sizeof(countStr), "%zu songs", songList.size());
+    snprintf(countStr, sizeof(countStr), "%zu 首歌曲", songList.size());
     int countW = textwidth(countStr);
     outtextxy((int)(panelX + (panelW - countW) / 2), (int)(panelY + 45), countStr);
 
@@ -1685,6 +1739,11 @@ void GameWindow::drawSongListScreen() {
         float y = startY + i * itemH;
 
         bool isSelected = (idx == songListSelection);
+        
+        // 悬浮检测
+        bool hovered = (mouseX >= panelX + 20 && mouseX <= panelX + panelW - 20 &&
+                        mouseY >= y && mouseY <= y + itemH);
+        if (hovered) songListSelection = idx;
 
         // 背景条
         sf::RectangleShape row({panelW - 40, itemH - 2});
@@ -1692,6 +1751,9 @@ void GameWindow::drawSongListScreen() {
         if (isSelected) {
             row.setFillColor(sf::Color(0, 60, 60, 200));
             row.setOutlineColor(sf::Color(0, 220, 220, 150));
+        } else if (hovered) {
+            row.setFillColor(sf::Color(0, 80, 80, 150));
+            row.setOutlineColor(sf::Color(0, 180, 180, 100));
         } else {
             row.setFillColor(sf::Color(30, 30, 40, 100));
             row.setOutlineColor(sf::Color(60, 60, 80, 50));
@@ -1702,6 +1764,9 @@ void GameWindow::drawSongListScreen() {
         // 歌曲名
         if (isSelected) {
             settextcolor(RGB(0, 255, 200));
+            settextstyle(16, 0, "Consolas");
+        } else if (hovered) {
+            settextcolor(RGB(200, 220, 240));
             settextstyle(16, 0, "Consolas");
         } else {
             settextcolor(RGB(180, 180, 200));
@@ -1716,7 +1781,7 @@ void GameWindow::drawSongListScreen() {
             settextcolor(RGB(80, 80, 100));
         }
         settextstyle(12, 0, "Consolas");
-        const char* status = songList[idx].hasChart ? "[Chart]" : "[No Chart]";
+        const char* status = songList[idx].hasChart ? "[有谱]" : "[无谱]";
         outtextxy((int)(panelX + panelW - 90), (int)(y + 12), status);
     }
 
@@ -1724,13 +1789,121 @@ void GameWindow::drawSongListScreen() {
     if ((int)songList.size() > maxVisible) {
         settextcolor(RGB(80, 80, 100));
         settextstyle(11, 0, "Consolas");
-        outtextxy((int)(panelX + (panelW - textwidth("W/S to scroll")) / 2), (int)(panelY + panelH - 35), "W/S to scroll");
+        outtextxy((int)(panelX + (panelW - textwidth("W/S: 滚动")) / 2), (int)(panelY + panelH - 35), "W/S: 滚动");
     }
 
     // 返回提示
     settextcolor(RGB(100, 100, 120));
     settextstyle(12, 0, "Consolas");
-    outtextxy((int)(panelX + (panelW - textwidth("ESC: Return  |  ENTER: Play")) / 2), (int)(panelY + panelH - 18), "ESC: Return  |  ENTER: Play");
+    outtextxy((int)(panelX + (panelW - textwidth("ESC: 返回  |  回车: 播放")) / 2), (int)(panelY + panelH - 18), "ESC: 返回  |  回车: 播放");
+}
+
+// ========== 代管轨道选择界面 ==========
+void GameWindow::drawTrackDelegateScreen() {
+    using namespace _easyx_impl;
+    
+    // 半透明遮罩
+    sf::RectangleShape overlay({(float)width, (float)height});
+    overlay.setFillColor(sf::Color(10, 10, 25, 220));
+    g_window->draw(overlay);
+    
+    float panelW = 450.0f, panelH = 420.0f;
+    float panelX = (width - panelW) / 2.0f;
+    float panelY = (height - panelH) / 2.0f;
+    
+    sf::RectangleShape panel({panelW, panelH});
+    panel.setPosition({panelX, panelY});
+    panel.setFillColor(sf::Color(20, 20, 40, 240));
+    panel.setOutlineColor(sf::Color(0, 200, 200, 100));
+    panel.setOutlineThickness(2.0f);
+    g_window->draw(panel);
+    
+    // 标题
+    settextcolor(RGB(0, 255, 200));
+    settextstyle(22, 0, "Consolas");
+    outtextxy((int)(panelX + (panelW - textwidth("代管轨道")) / 2), (int)(panelY + 20), "代管轨道");
+    
+    settextcolor(RGB(150, 150, 180));
+    settextstyle(13, 0, "Consolas");
+    outtextxy((int)(panelX + (panelW - textwidth("空格: 切换  |  回车: 开始  |  ESC: 返回")) / 2), (int)(panelY + 50), "空格: 切换  |  回车: 开始  |  ESC: 返回");
+    
+    // 轨道名称映射
+    const char* trackNames[] = {"底鼓", "踩镲", "吊镲", "军鼓", "通鼓", "叮镲"};
+    const char* trackKeys[] = {"A", "S", "D", "F", "J", "K"};
+    sf::Color trackColors[] = {
+        sf::Color(255, 100, 100), sf::Color(100, 255, 100), sf::Color(255, 255, 100),
+        sf::Color(100, 100, 255), sf::Color(255, 180, 50), sf::Color(200, 100, 255)
+    };
+    
+    float startY = panelY + 100.0f;
+    float itemH = 32.0f;
+    
+    for (int i = 0; i < 6; i++) {
+        float y = startY + i * itemH;
+        bool sel = (i == trackDelegateSel);
+        bool on = trackAutoPlay[i];
+        
+        // 悬浮检测
+        bool hovered = (mouseX >= panelX + 30 && mouseX <= panelX + panelW - 30 &&
+                        mouseY >= y && mouseY <= y + itemH);
+        if (hovered) trackDelegateSel = i;
+        
+        // 行背景
+        sf::RectangleShape row({panelW - 60, itemH - 2});
+        row.setPosition({panelX + 30, y});
+        if (sel) {
+            row.setFillColor(sf::Color(0, 70, 70, 200));
+            row.setOutlineColor(sf::Color(0, 220, 220, 150));
+        } else if (hovered) {
+            row.setFillColor(sf::Color(0, 80, 80, 150));
+            row.setOutlineColor(sf::Color(0, 180, 180, 100));
+        } else {
+            row.setFillColor(sf::Color(30, 30, 45, 120));
+            row.setOutlineColor(sf::Color(50, 50, 70, 50));
+        }
+        row.setOutlineThickness(1.0f);
+        g_window->draw(row);
+        
+        // 轨道颜色标记
+        sf::CircleShape dot(6);
+        dot.setPosition({panelX + 45, y + 10});
+        dot.setFillColor(sf::Color(trackColors[i].r, trackColors[i].g, trackColors[i].b, 220));
+        g_window->draw(dot);
+        
+        // 轨道名 + 按键
+        char label[64];
+        snprintf(label, sizeof(label), "%s  [%s]", trackNames[i], trackKeys[i]);
+        settextcolor(RGB(trackColors[i].r, trackColors[i].g, trackColors[i].b));
+        settextstyle(16, 0, "Consolas");
+        outtextxy((int)(panelX + 65), (int)(y + 6), label);
+        
+        // ON/OFF 状态
+        if (on) {
+            settextcolor(RGB(0, 255, 150));
+            settextstyle(15, 0, "Consolas");
+            outtextxy((int)(panelX + panelW - 120), (int)(y + 8), "[代管]");
+        } else {
+            settextcolor(RGB(120, 120, 140));
+            settextstyle(15, 0, "Consolas");
+            outtextxy((int)(panelX + panelW - 120), (int)(y + 8), "[演奏]");
+        }
+    }
+    
+    // 确认按钮（含悬浮高亮）
+    float btnY = startY + 6 * itemH + 30;
+    float btnBX = panelX + 100, btnBW = panelW - 200, btnBH = 36.0f;
+    bool btnHover = (mouseX >= btnBX && mouseX <= btnBX + btnBW &&
+                     mouseY >= btnY && mouseY <= btnY + btnBH);
+    sf::RectangleShape btn({btnBW, btnBH});
+    btn.setPosition({btnBX, btnY});
+    btn.setFillColor(btnHover ? sf::Color(0, 160, 160, 240) : sf::Color(0, 120, 120, 200));
+    btn.setOutlineColor(sf::Color(0, 220, 220, btnHover ? 220 : 150));
+    btn.setOutlineThickness(btnHover ? 2.0f : 1.0f);
+    g_window->draw(btn);
+    
+    settextcolor(btnHover ? RGB(0, 255, 220) : RGB(0, 255, 200));
+    settextstyle(17, 0, "Consolas");
+    outtextxy((int)(panelX + (panelW - textwidth("开始游戏")) / 2), (int)(btnY + 10), "开始游戏");
 }
 
 // ========== 主循环 ==========
@@ -1740,6 +1913,16 @@ void GameWindow::run() {
 
     while (isRunning) {
         long long frameStart = GetTickCount64();
+
+        // 更新鼠标坐标
+        {
+            using namespace _easyx_impl;
+            if (g_window && g_windowOpen) {
+                sf::Vector2i mp = sf::Mouse::getPosition(*g_window);
+                mouseX = (float)mp.x;
+                mouseY = (float)mp.y;
+            }
+        }
 
         if (gameState == MENU) {
             if (isInSettings) {
@@ -1753,6 +1936,8 @@ void GameWindow::run() {
             }
         } else if (gameState == ANALYZING) {
             handleAnalysisInput();
+        } else if (gameState == TRACK_DELEGATE) {
+            handleTrackDelegateInput();
         } else if (gameState == PLAYING) {
             handleInput();
             if (!isRunning) break;

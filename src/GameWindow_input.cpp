@@ -113,61 +113,66 @@ void GameWindow::handleMenuInput() {
         return;
     }
 
-    // 上下选择
+    // 上下选择（每键独立 debounce）
+    static bool prevW = false, prevS = false, prevEnter = false;
+
     bool upPressed = (GetAsyncKeyState('W') & 0x8000) != 0;
     bool downPressed = (GetAsyncKeyState('S') & 0x8000) != 0;
     bool enterPressed = (GetAsyncKeyState(VK_RETURN) & 0x8000) != 0;
 
-    // 防重复：只在按下瞬间响应
-    bool anyKey = upPressed || downPressed || enterPressed;
-    if (anyKey && !keyMenuWasPressed) {
-        if (upPressed) {
-            menuSelection--;
-            if (menuSelection < 0) menuSelection = 6;
-        }
-        if (downPressed) {
-            menuSelection++;
-            if (menuSelection > 6) menuSelection = 0;
-        }
-        if (enterPressed) {
-            switch (menuSelection) {
-                case 0: // 歌曲列表
-                    refreshSongList();
-                    isShowingSongList = true;
-                    songListSelection = 0;
-                    break;
+    // 从子页面返回菜单时同步按键状态，防止Enter穿透
+    if (menuJustOpened) {
+        menuJustOpened = false;
+        prevW = upPressed; prevS = downPressed;
+        prevEnter = enterPressed;
+        mouseWasPressed = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
+        return;
+    }
 
-                case 1: // 导入MP3
-                    importRequested = true;
-                    break;
+    bool upJust = upPressed && !prevW;
+    bool downJust = downPressed && !prevS;
+    bool enterJust = enterPressed && !prevEnter;
+    prevW = upPressed; prevS = downPressed; prevEnter = enterPressed;
 
-                case 2: // 导入谱面
-                    importChartPackage();
-                    break;
+    if (upJust) {
+        menuSelection--;
+        if (menuSelection < 0) menuSelection = 6;
+    }
+    if (downJust) {
+        menuSelection++;
+        if (menuSelection > 4) menuSelection = 0;
+    }
+    if (enterJust) {
+        switch (menuSelection) {
+            case 0: // 歌曲列表
+                refreshSongList();
+                isShowingSongList = true;
+                songListSelection = 0;
+                songListJustOpened = true;  // 防止 Enter 粘滞
+                break;
 
-                case 3: // 成就
-                    showAchievements = true;
-                    break;
+            case 1: // 成就
+                showAchievements = true;
+                break;
 
-                case 4: // 进入设置界面
-                    isInSettings = true;
-                    settingsMenuSelection = 0;
-                    break;
+            case 2: // 进入设置界面
+                isInSettings = true;
+                settingsMenuSelection = 0;
+                settingsJustOpened = true;
+                break;
 
-                case 5: // 难度选择 - 循环切换
-                    difficultySelection = (difficultySelection + 1) % 3;
-                    currentDifficulty = (Difficulty)difficultySelection;
-                    break;
+            case 3: // 难度选择 - 循环切换
+                difficultySelection = (difficultySelection + 1) % 3;
+                currentDifficulty = (Difficulty)difficultySelection;
+                break;
 
-                case 6: // 退出
-                    isRunning = false;
-                    break;
-            }
+            case 4: // 退出
+                isRunning = false;
+                break;
         }
     }
-    keyMenuWasPressed = anyKey;
 
-    // 鼠标点击菜单项：第一次选中，第二次确认
+    // 鼠标点击菜单项：单击直接选中并确认
     if (isMouseClick()) {
         sf::Vector2i mousePos = sf::Mouse::getPosition(*_easyx_impl::g_window);
         float mx = (float)mousePos.x;
@@ -176,87 +181,39 @@ void GameWindow::handleMenuInput() {
         int menuY = 170;
         int itemH = 48;
 
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 5; i++) {
             float itemY = (float)(menuY + i * itemH);
             if (isPointInRect(mx, my, menuX, itemY - 5.0f, 300.0f, 40.0f)) {
-                if (menuSelection == i) {
-                    // 已选中，再次点击才执行
-                    switch (menuSelection) {
-                        case 0: // 歌曲列表
-                            refreshSongList();
-                            isShowingSongList = true;
-                            songListSelection = 0;
-                            break;
-                        case 1:
-                            importRequested = true;
-                            break;
-                        case 2:
-                            importChartPackage();
-                            break;
-                        case 3:
-                            showAchievements = true;
-                            break;
-                        case 4:
-                            isInSettings = true;
-                            settingsMenuSelection = 0;
-                            break;
-                        case 5:
-                            difficultySelection = (difficultySelection + 1) % 3;
-                            currentDifficulty = (Difficulty)difficultySelection;
-                            break;
-                        case 6:
-                            isRunning = false;
-                            break;
-                    }
-                } else {
-                    menuSelection = i;
+                menuSelection = i;
+                // 直接执行对应操作
+                switch (i) {
+                    case 0:
+                        refreshSongList();
+                        isShowingSongList = true;
+                        songListSelection = 0;
+                        songListJustOpened = true;
+                        break;
+                    case 1:
+                        showAchievements = true;
+                        break;
+                    case 2:
+                        isInSettings = true;
+                        settingsMenuSelection = 0;
+                        settingsJustOpened = true;
+                        break;
+                    case 3:
+                        difficultySelection = (difficultySelection + 1) % 3;
+                        currentDifficulty = (Difficulty)difficultySelection;
+                        break;
+                    case 4:
+                        isRunning = false;
+                        break;
                 }
                 break;
             }
         }
     }
 
-    // 处理MP3导入请求 -> 跳转到分析界面
-    if (importRequested) {
-        importRequested = false;
-
-        // 基于可执行文件位置查找songs目录（兼容Finder双击启动）
-        std::string exeDir;
-        {
-            char buf[1024];
-            uint32_t size = sizeof(buf);
-            if (_NSGetExecutablePath(buf, &size) == 0) {
-                exeDir = buf;
-                auto pos = exeDir.find_last_of('/');
-                if (pos != std::string::npos) exeDir = exeDir.substr(0, pos);
-            } else {
-                char cwd[512];
-                if (getcwd(cwd, sizeof(cwd))) exeDir = cwd;
-            }
-        }
-
-        std::string songsDir = exeDir + "/songs/";
-        std::string cmd = "ls '" + songsDir + "'*.mp3 2>/dev/null | head -1";
-        FILE* pipe = popen(cmd.c_str(), "r");
-        std::string foundFile;
-        if (pipe) {
-            char buffer[512];
-            if (fgets(buffer, sizeof(buffer), pipe)) {
-                foundFile = buffer;
-                if (!foundFile.empty() && foundFile.back() == '\n')
-                    foundFile.pop_back();
-            }
-            pclose(pipe);
-        }
-
-        if (!foundFile.empty()) {
-            analysisFilePath = foundFile;
-            startAnalysis();
-        } else {
-            printf("未找到MP3文件，请将MP3放入: %s\n", songsDir.c_str());
-            fflush(stdout);
-        }
-    }
 }
 
 // ========== V3.2: 开始歌曲分析 ==========
@@ -300,6 +257,10 @@ void GameWindow::loadSongForPlaying() {
     if (!audioManager.playOriginalSong(analysisFilePath)) {
         audioManager.generateSyncedBGM(noteTimeData);
     }
+    // 不立即开始：等代管选轨确认后再启动
+}
+
+void GameWindow::startDelegatedGame() {
     gameStartTime = GetTickCount64();
     currentTime = 0;
     gameState = PLAYING;
@@ -337,6 +298,17 @@ void GameWindow::handleAnalysisInput() {
 
     static bool prevUp = false, prevDown = false, prevLeft = false, prevRight = false;
     static bool prevEnter = false, prevEsc = false, prevR = false, prevT = false;
+
+    // 刚进入分析界面时同步所有按键状态，防止上一屏的按键穿透
+    if (analysisJustOpened) {
+        analysisJustOpened = false;
+        prevUp = upPressed; prevDown = downPressed;
+        prevLeft = leftPressed; prevRight = rightPressed;
+        prevEnter = enterPressed; prevEsc = escPressed;
+        prevR = rPressed; prevT = tPressed;
+        mouseWasPressed = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
+        return;
+    }
 
     bool upJustPressed = upPressed && !prevUp;
     bool downJustPressed = downPressed && !prevDown;
@@ -439,8 +411,12 @@ void GameWindow::handleAnalysisInput() {
     // ENTER确认
     if (enterJustPressed) {
         switch (analysisMenuSelection) {
-            case 2: // 开始游戏
+            case 2: // 开始游戏 → 先选代管轨道
                 loadSongForPlaying();
+                gameState = TRACK_DELEGATE;
+                trackDelegateJustOpened = true;
+                for (int i = 0; i < 6; i++) trackAutoPlay[i] = false;
+                trackDelegateSel = 0;
                 break;
             case 3: { // 导出JSON
                 std::string outPath = analysisFilePath + ".chart.json";
@@ -451,6 +427,7 @@ void GameWindow::handleAnalysisInput() {
             }
             case 4: // 返回菜单
                 gameState = MENU;
+                menuJustOpened = true;
                 break;
         }
     }
@@ -496,29 +473,26 @@ void GameWindow::handleAnalysisInput() {
         for (int i = 0; i < 5; i++) {
             float bx = btnStartX + i * (btnW + btnSpacing);
             if (isPointInRect(mx, my, bx, btnBaseY, btnW, btnH)) {
-                if (analysisMenuSelection == i) {
-                    // 已选中，再次点击执行
-                    switch (i) {
-                        case 0: // BPM - 无需动作，用A/D调整
-                            break;
-                        case 1: // 偏移 - 无需动作，用A/D调整
-                            break;
-                        case 2:
-                            loadSongForPlaying();
-                            return;
-                        case 3: {
-                            std::string outPath = analysisFilePath + ".chart.json";
-                            SongAnalyzer::exportChart(outPath, analysisResult);
-                            printf("谱面已导出: %s\n", outPath.c_str());
-                            fflush(stdout);
-                            break;
-                        }
-                        case 4:
-                            gameState = MENU;
-                            return;
+                analysisMenuSelection = i;
+                // hover已选中，单击直接执行
+                switch (i) {
+                    case 0: case 1: // BPM/偏移 - 用A/D调整，仅选中
+                        break;
+                    case 2:
+                        loadSongForPlaying();
+                        gameState = TRACK_DELEGATE;
+                        trackDelegateJustOpened = true;
+                        return;
+                    case 3: {
+                        std::string outPath = analysisFilePath + ".chart.json";
+                        SongAnalyzer::exportChart(outPath, analysisResult);
+                        printf("谱面已导出: %s\n", outPath.c_str());
+                        fflush(stdout);
+                        break;
                     }
-                } else {
-                    analysisMenuSelection = i;
+                    case 4:
+                        gameState = MENU;
+                        return;
                 }
                 break;
             }
@@ -591,6 +565,7 @@ void GameWindow::handleInput() {
             // 切换暂停/继续
             gameState = PAUSED;
             pauseStartTime = GetTickCount64();
+            pauseJustOpened = true;  // 防止同一ESC按键在下一帧触发恢复
             audioManager.pauseBGM();
         } else if (gameState == PAUSED) {
             // 继续游戏
@@ -632,6 +607,16 @@ void GameWindow::handleInput() {
         }
         f1WasPressed = f1Pressed;
         f2WasPressed = f2Pressed;
+
+        // V3.7: P键切换自动演示模式
+        static bool pWasPressed = false;
+        bool pPressed = (GetAsyncKeyState('P') & 0x8000) != 0;
+        if (pPressed && !pWasPressed) {
+            autoPlay = !autoPlay;
+            printf("[GameWindow] AutoPlay: %s\n", autoPlay ? "ON" : "OFF");
+            fflush(stdout);
+        }
+        pWasPressed = pPressed;
     }
 }
 
@@ -722,7 +707,7 @@ void GameWindow::handleResultInput() {
         }
     }
 
-    // 鼠标点击结算菜单按钮：第一次选中，第二次确认
+    // 鼠标点击结算菜单按钮：单击直接执行
     if (isMouseClick()) {
         sf::Vector2i mousePos = sf::Mouse::getPosition(*_easyx_impl::g_window);
         float mx = (float)mousePos.x;
@@ -739,42 +724,40 @@ void GameWindow::handleResultInput() {
         for (int i = 0; i < 2; i++) {
             float x = startX + i * (buttonW + buttonSpacing);
             if (isPointInRect(mx, my, x, buttonY, buttonW, buttonH)) {
-                if (resultMenuSelection == i) {
-                    // 已选中，再次点击才执行
-                    dataManager.saveResult(currentSongName, (int)currentDifficulty,
-                                           scoreSystem.getTotalScore(), scoreSystem.getMaxCombo());
-                    if (i == 0) {
-                        scoreSystem.reset();
-                        tracks.clear();
-                        initTracks();
-                        if (parseResult.success && !parseResult.noteTimeData.empty()) {
-                            double speed = getDifficultySpeed();
-                            for (const auto& [timeMs, track] : parseResult.noteTimeData) {
-                                auto note = std::make_unique<NormalNote>(track, timeMs, JUDGE_Y, speed, TRACK_COLORS[track]);
-                                tracks[track]->addNote(std::move(note));
-                            }
-                            noteTimeData = parseResult.noteTimeData;
-                            lastNoteTime = parseResult.lastNoteTime;
-                        } else {
-                            loadDemoSong();
+                // 单击直接执行
+                dataManager.saveResult(currentSongName, (int)currentDifficulty,
+                                       scoreSystem.getTotalScore(), scoreSystem.getMaxCombo());
+                if (i == 0) {
+                    // 重新开始
+                    scoreSystem.reset();
+                    tracks.clear();
+                    initTracks();
+                    if (parseResult.success && !parseResult.noteTimeData.empty()) {
+                        double speed = getDifficultySpeed();
+                        for (const auto& [timeMs, track] : parseResult.noteTimeData) {
+                            auto note = std::make_unique<NormalNote>(track, timeMs, JUDGE_Y, speed, TRACK_COLORS[track]);
+                            tracks[track]->addNote(std::move(note));
                         }
-                        audioManager.generateSyncedBGM(noteTimeData);
-                        gameStartTime = GetTickCount64();
-                        currentTime = 0;
-                        lastJudgement = NONE;
-                        judgementDisplayTimer = 0;
-                        prevCombo = 0;
-                        hitAnims.clear();
-                        textAnims.clear();
-                        comboAnim.elapsed = comboAnim.duration;
-                        for (int j = 0; j < 4; j++) { keyPressed[j] = false; keyWasPressed[j] = false; keyGlowAlpha[j] = 0; }
-                        gameState = PLAYING;
-                        audioManager.playBGM();
+                        noteTimeData = parseResult.noteTimeData;
+                        lastNoteTime = parseResult.lastNoteTime;
                     } else {
-                        gameState = MENU;
+                        loadDemoSong();
                     }
+                    audioManager.generateSyncedBGM(noteTimeData);
+                    gameStartTime = GetTickCount64();
+                    currentTime = 0;
+                    lastJudgement = NONE;
+                    judgementDisplayTimer = 0;
+                    prevCombo = 0;
+                    hitAnims.clear();
+                    textAnims.clear();
+                    comboAnim.elapsed = comboAnim.duration;
+                    for (int j = 0; j < 4; j++) { keyPressed[j] = false; keyWasPressed[j] = false; keyGlowAlpha[j] = 0; }
+                    gameState = PLAYING;
+                    audioManager.playBGM();
                 } else {
-                    resultMenuSelection = i;
+                    // 返回主菜单
+                    gameState = MENU;
                 }
                 break;
             }
@@ -786,7 +769,7 @@ void GameWindow::handleResultInput() {
 
 void GameWindow::spawnHitAnim(int trackId, float noteY, Judgement j) {
     HitAnim anim;
-    anim.x = getTrackX(trackId) + 50.0f;
+    anim.x = getTrackX(trackId) + 35.0f;  // 轨道中心
     anim.y = noteY;
     anim.elapsed = 0.0f;
     switch (j) {
@@ -799,7 +782,7 @@ void GameWindow::spawnHitAnim(int trackId, float noteY, Judgement j) {
 
 void GameWindow::spawnTextPopup(int trackId, Judgement j) {
     TextPopupAnim anim;
-    anim.x = getTrackX(trackId) + 50.0f;
+    anim.x = getTrackX(trackId) + 35.0f;  // 轨道中心
     anim.y = JUDGE_Y - 60.0f;
     anim.elapsed = 0.0f;
     switch (j) {
@@ -819,6 +802,32 @@ void GameWindow::update() {
     }
 
     currentTime = GetTickCount64() - gameStartTime;
+
+    // V3.7: 自动演示/代管模式 - 仅代管选中轨道
+    if (gameState == PLAYING) {
+        for (int i = 0; i < TRACK_COUNT; i++) {
+            if (!autoPlay && !trackAutoPlay[i]) continue;
+            long long nextNoteTime = tracks[i]->getNextNoteJudgeTime();
+            if (nextNoteTime == LLONG_MAX) continue;
+            long long diff = currentTime - nextNoteTime;
+            // 在音符到达判定线时自动触发（误差<30ms）
+            if (diff >= 0 && diff < 30) {
+                NoteTrack::JudgeResult result = tracks[i]->handlePress(currentTime);
+                if (result.judgement != NONE) {
+                    scoreSystem.addJudgement(result.judgement);
+                    lastJudgement = result.judgement;
+                    judgementDisplayTimer = 30;
+                    spawnHitAnim(i, result.noteY, result.judgement);
+                    spawnTextPopup(i, result.judgement);
+                    spawnParticles(getTrackX(i) + TRACK_WIDTH / 2.0f, result.noteY, result.judgement);
+                    if (result.judgement == PERFECT) audioManager.playHit(true, i);
+                    else if (result.judgement == GOOD) audioManager.playHit(false, i);
+                    keyGlowAlpha[i] = 255;
+                    keyFeedback[i].glowTimer = KeyFeedback::GLOW_DURATION;
+                }
+            }
+        }
+    }
 
     for (auto& track : tracks) {
         auto autoMisses = track->update(currentTime, scoreSystem);
@@ -1032,6 +1041,15 @@ void GameWindow::handlePauseInput() {
         }
     }
 
+    // 刚进入暂停时同步ESC状态，防止同一按键触发立即恢复
+    if (pauseJustOpened) {
+        pauseJustOpened = false;
+        escWasPressed = escPressed;
+        upWasPressed = upPressed; downWasPressed = downPressed;
+        enterWasPressed = enterPressed;
+        return;
+    }
+
     // ESC直接继续游戏
     if (escPressed && !escWasPressed) {
         escWasPressed = true;
@@ -1111,6 +1129,7 @@ void GameWindow::handlePauseInput() {
                 audioManager.stopBGM();
                 pauseMenuSelection = 0;
                 gameState = MENU;
+                menuJustOpened = true;
                 break;
             }
         }
@@ -1314,6 +1333,19 @@ void GameWindow::handleSettingsInput() {
     static bool enterWasPressed = false;
     static bool escWasPressed = false;
 
+    // 防粘滞：刚打开时同步static prev为当前按键状态
+    if (settingsJustOpened) {
+        settingsJustOpened = false;
+        keyUpWasPressed = (GetAsyncKeyState('W') & 0x8000) != 0;
+        keyDownWasPressed = (GetAsyncKeyState('S') & 0x8000) != 0;
+        keyLeftWasPressed = (GetAsyncKeyState('A') & 0x8000) != 0;
+        keyRightWasPressed = (GetAsyncKeyState('D') & 0x8000) != 0;
+        enterWasPressed = (GetAsyncKeyState(VK_RETURN) & 0x8000) != 0;
+        escWasPressed = (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
+        mouseWasPressed = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
+        return;
+    }
+
     bool upPressed = (GetAsyncKeyState('W') & 0x8000) != 0;
     bool downPressed = (GetAsyncKeyState('S') & 0x8000) != 0;
     bool leftPressed = (GetAsyncKeyState('A') & 0x8000) != 0;
@@ -1353,7 +1385,7 @@ void GameWindow::handleSettingsInput() {
             if ((GetAsyncKeyState(vk) & 0x8000) && vk != 'W' && vk != 'S' && vk != 'A' && vk != 'D' && vk != VK_ESCAPE) {
                 // 检查是否和其他按键重复
                 bool duplicate = false;
-                for (int i = 0; i < 4; i++) {
+                for (int i = 0; i < 6; i++) {
                     if (i != currentKeySettingIndex && customKeys[i] == vk) {
                         duplicate = true;
                         break;
@@ -1374,14 +1406,14 @@ void GameWindow::handleSettingsInput() {
     // 上下切换选项
     if (upPressed && !keyUpWasPressed) {
         keyUpWasPressed = true;
-        settingsMenuSelection = (settingsMenuSelection - 1 + 9) % 9;
+        settingsMenuSelection = (settingsMenuSelection - 1 + 11) % 11;
     } else if (!upPressed) {
         keyUpWasPressed = false;
     }
 
     if (downPressed && !keyDownWasPressed) {
         keyDownWasPressed = true;
-        settingsMenuSelection = (settingsMenuSelection + 1) % 9;
+        settingsMenuSelection = (settingsMenuSelection + 1) % 11;
     } else if (!downPressed) {
         keyDownWasPressed = false;
     }
@@ -1432,20 +1464,18 @@ void GameWindow::handleSettingsInput() {
     if (enterPressed && !enterWasPressed) {
         enterWasPressed = true;
 
-        // 按键设置选项
-        if (settingsMenuSelection >= 3 && settingsMenuSelection < 7) {
+        // 按键设置选项（6个按键）
+        if (settingsMenuSelection >= 3 && settingsMenuSelection < 9) {
             currentKeySettingIndex = settingsMenuSelection - 3;
             keySettingWaitingRelease = false;
         }
         // 恢复默认按键
-        else if (settingsMenuSelection == 7) {
-            customKeys[0] = 'A';
-            customKeys[1] = 'S';
-            customKeys[2] = 'D';
-            customKeys[3] = 'F';
+        else if (settingsMenuSelection == 9) {
+            customKeys[0] = 'A'; customKeys[1] = 'S'; customKeys[2] = 'D';
+            customKeys[3] = 'F'; customKeys[4] = 'J'; customKeys[5] = 'K';
         }
         // 保存返回
-        else if (settingsMenuSelection == 8) {
+        else if (settingsMenuSelection == 10) {
             saveConfig();
             isInSettings = false;
             settingsMenuSelection = 0;
@@ -1462,13 +1492,13 @@ void GameWindow::handleSettingsInput() {
         escWasPressed = false;
     }
 
-    // 鼠标点击设置选项：第一次选中，第二次确认（音量条除外，直接调整）
+    // 鼠标点击设置选项：单击直接执行（音量条直接调整，其他选中并执行）
     if (currentKeySettingIndex < 0 && isMouseClick()) {
         sf::Vector2i mousePos = sf::Mouse::getPosition(*_easyx_impl::g_window);
         float mx = (float)mousePos.x;
         float my = (float)mousePos.y;
 
-        float panelW = 500.0f, panelH = 500.0f;
+        float panelW = 500.0f, panelH = 620.0f;
         float panelX = (width - panelW) / 2.0f;
         float panelY = (height - panelH) / 2.0f;
         float optionY = panelY + 90.0f;
@@ -1476,12 +1506,12 @@ void GameWindow::handleSettingsInput() {
         float highlightW = 400.0f, highlightH = 35.0f;
         float highlightX = panelX + (panelW - highlightW) / 2.0f;
 
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < 11; i++) {
             float currentY = optionY + i * optionH - 5.0f;
             if (isPointInRect(mx, my, highlightX, currentY, highlightW, highlightH)) {
+                settingsMenuSelection = i;
                 if (i < 2) {
-                    // 音量选项：直接点击调整，不需要选中确认
-                    settingsMenuSelection = i;
+                    // 音量选项：点击位置决定加减
                     float midX = highlightX + highlightW / 2.0f;
                     if (mx < midX) {
                         if (i == 0) { musicVolume = std::max(0.0f, musicVolume - 0.1f); audioManager.setMusicVolume(musicVolume); }
@@ -1490,18 +1520,22 @@ void GameWindow::handleSettingsInput() {
                         if (i == 0) { musicVolume = std::min(1.0f, musicVolume + 0.1f); audioManager.setMusicVolume(musicVolume); }
                         else { effectVolume = std::min(1.0f, effectVolume + 0.1f); audioManager.setEffectVolume(effectVolume); audioManager.playHit(false); }
                     }
-                } else if (settingsMenuSelection == i) {
-                    // 已选中，再次点击才执行
-                    if (i >= 2 && i < 6) {
-                        currentKeySettingIndex = i - 2;
-                        keySettingWaitingRelease = false;
-                    } else if (i == 6) {
-                        customKeys[0] = 'A'; customKeys[1] = 'S'; customKeys[2] = 'D'; customKeys[3] = 'F';
-                    } else if (i == 7) {
-                        saveConfig(); isInSettings = false; settingsMenuSelection = 0;
-                    }
-                } else {
-                    settingsMenuSelection = i;
+                } else if (i == 2) {
+                    // 音效包：点击切换
+                    int pack = audioManager.getSoundPack();
+                    audioManager.setSoundPack((pack + 1) % 2);
+                    audioManager.playHit(false);
+                } else if (i >= 3 && i < 9) {
+                    // 按键设置（菜单3-8 → keyIdx 0-5）
+                    currentKeySettingIndex = i - 3;
+                    keySettingWaitingRelease = false;
+                } else if (i == 9) {
+                    // 重置为默认
+                    customKeys[0] = 'A'; customKeys[1] = 'S'; customKeys[2] = 'D';
+                    customKeys[3] = 'F'; customKeys[4] = 'J'; customKeys[5] = 'K';
+                } else if (i == 10) {
+                    // 保存并退出
+                    saveConfig(); isInSettings = false; settingsMenuSelection = 0;
                 }
                 break;
             }
@@ -1521,6 +1555,8 @@ void GameWindow::saveConfig() {
         fprintf(fp, "key2 = %d\n", customKeys[1]);
         fprintf(fp, "key3 = %d\n", customKeys[2]);
         fprintf(fp, "key4 = %d\n", customKeys[3]);
+        fprintf(fp, "key5 = %d\n", customKeys[4]);
+        fprintf(fp, "key6 = %d\n", customKeys[5]);
         fprintf(fp, "sound_pack = %d\n", audioManager.getSoundPack());
         fclose(fp);
         printf("[Config] Saved config\n");
@@ -1538,41 +1574,32 @@ void GameWindow::loadConfig(const std::string& path) {
             } else if (strstr(line, "effect_volume")) {
                 sscanf(line, "effect_volume = %f", &effectVolume);
             } else if (strstr(line, "key1")) {
-                int k;
-                sscanf(line, "key1 = %d", &k);
-                customKeys[0] = k;
+                int k; sscanf(line, "key1 = %d", &k); customKeys[0] = k;
             } else if (strstr(line, "key2")) {
-                int k;
-                sscanf(line, "key2 = %d", &k);
-                customKeys[1] = k;
+                int k; sscanf(line, "key2 = %d", &k); customKeys[1] = k;
             } else if (strstr(line, "key3")) {
-                int k;
-                sscanf(line, "key3 = %d", &k);
-                customKeys[2] = k;
+                int k; sscanf(line, "key3 = %d", &k); customKeys[2] = k;
             } else if (strstr(line, "key4")) {
-                int k;
-                sscanf(line, "key4 = %d", &k);
-                customKeys[3] = k;
+                int k; sscanf(line, "key4 = %d", &k); customKeys[3] = k;
+            } else if (strstr(line, "key5")) {
+                int k; sscanf(line, "key5 = %d", &k); customKeys[4] = k;
+            } else if (strstr(line, "key6")) {
+                int k; sscanf(line, "key6 = %d", &k); customKeys[5] = k;
             } else if (strstr(line, "sound_pack")) {
-                int sp;
-                sscanf(line, "sound_pack = %d", &sp);
-                audioManager.setSoundPack(sp);
+                int sp; sscanf(line, "sound_pack = %d", &sp); audioManager.setSoundPack(sp);
             }
         }
         fclose(fp);
-        // 音量范围限制
         musicVolume = std::max(0.0f, std::min(1.0f, musicVolume));
         effectVolume = std::max(0.0f, std::min(1.0f, effectVolume));
-        printf("[Config] Loaded config: music=%.2f effect=%.2f keys=[%s, %s, %s, %s]\n", musicVolume, effectVolume,
-               getKeyName(customKeys[0]), getKeyName(customKeys[1]), getKeyName(customKeys[2]), getKeyName(customKeys[3]));
+        printf("[Config] Loaded config: music=%.2f effect=%.2f keys=[%s, %s, %s, %s, %s, %s]\n", musicVolume, effectVolume,
+               getKeyName(customKeys[0]), getKeyName(customKeys[1]), getKeyName(customKeys[2]),
+               getKeyName(customKeys[3]), getKeyName(customKeys[4]), getKeyName(customKeys[5]));
     } else {
-        // 默认值
         musicVolume = 1.0f;
         effectVolume = 1.0f;
-        customKeys[0] = 'A';
-        customKeys[1] = 'S';
-        customKeys[2] = 'D';
-        customKeys[3] = 'F';
+        customKeys[0] = 'A'; customKeys[1] = 'S'; customKeys[2] = 'D';
+        customKeys[3] = 'F'; customKeys[4] = 'J'; customKeys[5] = 'K';
         saveConfig();
         printf("[Config] Created new default config\n");
     }
@@ -1678,7 +1705,7 @@ void GameWindow::handleAchievementsInput() {
     if (isMouseClick()) {
         sf::Vector2i mp = sf::Mouse::getPosition(*_easyx_impl::g_window);
         float mx = (float)mp.x, my = (float)mp.y;
-        float panelW = 600.0f, panelH = 500.0f;
+        float panelW = 600.0f, panelH = 620.0f;
         float panelX = (width - panelW) / 2.0f;
         float panelY = (height - panelH) / 2.0f;
         float btnX = panelX + (panelW - 200) / 2;
@@ -1709,8 +1736,8 @@ void GameWindow::refreshSongList() {
         }
         if (filename.empty()) continue;
 
-        // 只要.mp3文件
-        if (filename.size() > 4 && filename.substr(filename.size() - 4) == ".mp3") {
+        // 只要.mp3或.wav文件
+        if (filename.size() > 4 && (filename.substr(filename.size() - 4) == ".mp3" || filename.substr(filename.size() - 4) == ".wav")) {
             std::string name = filename.substr(0, filename.size() - 4);
             std::string path = songsDir + filename;
             // 检查是否已有谱面
@@ -1770,6 +1797,17 @@ void GameWindow::handleSongListInput() {
     bool enterPressed = (GetAsyncKeyState(VK_RETURN) & 0x8000) != 0;
 
     static bool prevEsc = false, prevUp = false, prevDown = false, prevEnter = false;
+
+    // 防粘滞：刚打开时同步static prev为当前按键状态
+    if (songListJustOpened) {
+        songListJustOpened = false;
+        mouseWasPressed = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);  // 同步鼠标状态，防止同一点击穿透
+        prevEsc = (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
+        prevUp = (GetAsyncKeyState('W') & 0x8000) != 0;
+        prevDown = (GetAsyncKeyState('S') & 0x8000) != 0;
+        prevEnter = (GetAsyncKeyState(VK_RETURN) & 0x8000) != 0;
+        return;
+    }
     bool escJust = escPressed && !prevEsc;
     bool upJust = upPressed && !prevUp;
     bool downJust = downPressed && !prevDown;
@@ -1822,6 +1860,7 @@ void GameWindow::handleSongListInput() {
                 manualBPM = analysisResult.bpm;
                 manualOffset = 0;
                 analysisDone = true;
+                analysisJustOpened = true;
                 gameState = ANALYZING;
             } else {
                 printf("[GameWindow] 无法解析: %s\n", selected.filePath.c_str());
@@ -1829,7 +1868,7 @@ void GameWindow::handleSongListInput() {
         }
     }
 
-    // 鼠标点击歌曲列表
+    // 鼠标点击歌曲列表：单击直接开始
     if (isMouseClick()) {
         sf::Vector2i mp = sf::Mouse::getPosition(*_easyx_impl::g_window);
         float mx = (float)mp.x, my = (float)mp.y;
@@ -1842,14 +1881,114 @@ void GameWindow::handleSongListInput() {
         for (int i = 0; i < (int)songList.size(); i++) {
             float itemY = startY + i * itemH;
             if (isPointInRect(mx, my, panelX + 20, itemY, panelW - 40, itemH)) {
-                if (songListSelection == i) {
-                    // 双击确认 → 触发enter逻辑
-                    enterJust = true;
-                } else {
-                    songListSelection = i;
+                songListSelection = i;
+                if (!songList.empty()) {
+                    auto& selected = songList[songListSelection];
+                    isShowingSongList = false;
+                    if (selected.name == "[Demo] TESO") {
+                        tracks.clear();
+                        scoreSystem.reset();
+                        initTracks();
+                        loadDemoSong();
+                        audioManager.generateSyncedBGM(noteTimeData);
+                        gameStartTime = GetTickCount64();
+                        currentTime = 0;
+                        gameState = PLAYING;
+                        prevCombo = 0;
+                        hitAnims.clear();
+                        textAnims.clear();
+                        audioManager.playBGM();
+                    } else {
+                        analysisFilePath = selected.filePath;
+                        currentSongName = selected.name;
+                        SongAnalyzer analyzer;
+                        analysisResult = analyzer.analyze(selected.filePath);
+                        if (analysisResult.success) {
+                            manualBPM = analysisResult.bpm;
+                            manualOffset = 0;
+                            analysisDone = true;
+                            gameState = ANALYZING;
+                        }
+                    }
                 }
                 break;
             }
+        }
+    }
+}
+
+// ========== 代管轨道选择界面输入处理 ==========
+void GameWindow::handleTrackDelegateInput() {
+    // 窗口事件
+    {
+        using namespace _easyx_impl;
+        if (g_window && g_windowOpen) {
+            while (const auto event = g_window->pollEvent()) {
+                if (event->is<sf::Event::Closed>()) {
+                    g_windowOpen = false;
+                    isRunning = false;
+                    return;
+                }
+            }
+        }
+    }
+
+    bool upPressed = (GetAsyncKeyState('W') & 0x8000) != 0;
+    bool downPressed = (GetAsyncKeyState('S') & 0x8000) != 0;
+    bool enterPressed = (GetAsyncKeyState(VK_RETURN) & 0x8000) != 0;
+    bool escPressed = (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
+    bool spacePressed = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
+
+    static bool prevUp = false, prevDown = false, prevEnter = false, prevEsc = false, prevSpace = false;
+
+    // 刚进入代管界面时同步所有按键状态，防止分析界面的Enter穿透
+    if (trackDelegateJustOpened) {
+        trackDelegateJustOpened = false;
+        prevUp = upPressed; prevDown = downPressed;
+        prevEnter = enterPressed; prevEsc = escPressed;
+        prevSpace = spacePressed;
+        mouseWasPressed = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
+        return;
+    }
+
+    bool upJ = upPressed && !prevUp;
+    bool dnJ = downPressed && !prevDown;
+    bool enJ = enterPressed && !prevEnter;
+    bool esJ = escPressed && !prevEsc;
+    bool spJ = spacePressed && !prevSpace;
+
+    prevUp = upPressed; prevDown = downPressed;
+    prevEnter = enterPressed; prevEsc = escPressed; prevSpace = spacePressed;
+
+    if (upJ) { trackDelegateSel = (trackDelegateSel + 5) % 6; }
+    if (dnJ) { trackDelegateSel = (trackDelegateSel + 1) % 6; }
+    if (spJ) { trackAutoPlay[trackDelegateSel] = !trackAutoPlay[trackDelegateSel]; }
+    if (esJ) { gameState = MENU; }
+    if (enJ) { startDelegatedGame(); }
+
+    // 鼠标点击
+    if (isMouseClick()) {
+        sf::Vector2i mp = sf::Mouse::getPosition(*_easyx_impl::g_window);
+        float mx = (float)mp.x, my = (float)mp.y;
+        float panelW = 450.0f, panelH = 420.0f;
+        float panelX = (width - panelW) / 2.0f;
+        float panelY = (height - panelH) / 2.0f;
+        float startY = panelY + 100.0f;
+        float itemH = 32.0f;
+        for (int i = 0; i < 6; i++) {
+            float iy = startY + i * itemH;
+            if (mx >= panelX + 50 && mx <= panelX + panelW - 50 &&
+                my >= iy && my <= iy + itemH) {
+                trackDelegateSel = i;
+                trackAutoPlay[i] = !trackAutoPlay[i];
+                break;
+            }
+        }
+        // 确认按钮
+        float btnY = startY + 6 * itemH + 30;
+        if (mx >= panelX + 100 && mx <= panelX + panelW - 100 &&
+            my >= btnY && my <= btnY + 36) {
+            startDelegatedGame();
         }
     }
 }

@@ -334,7 +334,7 @@ std::vector<std::pair<long long, int>> BeatParser::distributeToTracks(
             // 加权随机：使用次数少的轨道概率更高
             int totalUsed = trackUsage[0] + trackUsage[1] + trackUsage[2] + trackUsage[3];
             if (totalUsed == 0) {
-                track = rand() % 4;
+                track = rand() % 6;
             } else {
                 // 反向加权
                 float weights[4];
@@ -367,7 +367,7 @@ std::vector<std::pair<long long, int>> BeatParser::distributeToTracks(
 
         if ((rand() / (float)RAND_MAX) < doubleChance && i + 1 < beatTimes.size()) {
             int track2;
-            do { track2 = rand() % 4; } while (track2 == track);
+            do { track2 = rand() % 6; } while (track2 == track);
             result.push_back({beatTimes[i], track2});
             trackUsage[track2]++;
         }

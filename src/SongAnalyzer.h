@@ -21,6 +21,8 @@ public:
         long long timeMs;       // 时间戳(ms)
         float energy;           // 能量值
         bool isAccent;          // 是否重音拍（鼓点重的拍子）
+        int drumType;           // 鼓组类型: 0=unknown, 1=kick, 2=snare, 3=hihat, 4=tom_low, 5=tom_mid, 6=tom_high, 7=ride, 8=crash
+        BeatInfo() : timeMs(0), energy(0.0f), isAccent(false), drumType(0) {}
     };
 
     /**
