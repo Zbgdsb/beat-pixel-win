@@ -256,7 +256,10 @@ bool GameWindow::init() {
     // V3.4: 扫描歌曲列表
     refreshSongList();
 
+    // 保存soundPack，init会重置
+    int savedPack = audioManager.getSoundPack();
     audioManager.init();
+    audioManager.setSoundPack(savedPack);
     // 设置初始音量
     audioManager.setMusicVolume(musicVolume);
     audioManager.setEffectVolume(effectVolume);
