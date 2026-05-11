@@ -1,59 +1,97 @@
-name: Build Windows EXE
+name: Build BeatPixel (Windows)
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [main, master]
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+      - name: Setup MSYS2 (MinGW64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-openal
+            mingw-w64-x86_64-freetype
+            base-devel
+            git
 
-      - name: Setup SFML
+      - name: Download SFML 3
         shell: pwsh
         run: |
-          # 下载SFML for MSVC
-          Invoke-WebRequest -Uri "https://github.com/SFML/SFML/releases/download/2.6.1/SFML-2.6.1-windows-vc17-64-bit.zip" -OutFile sfml.zip
-          Expand-Archive -Path sfml.zip -DestinationPath .
-          Rename-Item "SFML-2.6.1" "sfml"
-          dir sfml/lib/
+          # Try official SFML 3.0.0 MinGW build
+          $url = "https://www.sfml-dev.org/files/SFML-3.0.0-windows-gcc-14.2.0-mingw-64-bit.zip"
+          Invoke-WebRequest -Uri $url -OutFile "sfml3.zip"
+          Expand-Archive sfml3.zip -DestinationPath .
+          $dir = Get-ChildItem -Directory -Name "SFML-*"
+          Rename-Item $dir sfml3
+          echo "SFML installed:"
+          ls sfml3/include/SFML/
 
-      - name: Build
-        shell: cmd
+      - name: Compile BeatPixel
+        shell: msys2 {0}
         run: |
-          mkdir build-win
-          set SFML_DIR=sfml
-          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\main.obj src\main.cpp
-          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\GameWindow.obj src\GameWindow.cpp
-          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\NoteTrack.obj src\NoteTrack.cpp
-          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\Note.obj src\Note.cpp
-          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\ScoreSystem.obj src\ScoreSystem.cpp
-          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\AudioManager.obj src\AudioManager.cpp
-          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\BeatParser.obj src\BeatParser.cpp
-          cl /std:c++17 /O2 /W3 /EHsc /DBEATPIXEL_USE_SFML /I"%SFML_DIR%\include" /c /Fobuild-win\DataManager.obj src\DataManager.cpp
-          link /OUT:BeatPixel.exe build-win\*.obj /LIBPATH:%SFML_DIR%\lib sfml-graphics.lib sfml-window.lib sfml-system.lib sfml-audio.lib opengl32.lib gdi32.lib user32.lib advapi32.lib winmm.lib
+          set -e
+          export PATH="/mingw64/bin:$PATH"
+          
+          g++ --version
+          
+          g++ -std=c++17 -O2 -Wall \
+            -Isrc -Isfml3/include -DBEATPIXEL_USE_SFML \
+            -o BeatPixel.exe \
+            src/main.cpp \
+            src/GameWindow.cpp \
+            src/NoteTrack.cpp \
+            src/Note.cpp \
+            src/ScoreSystem.cpp \
+            src/AudioManager.cpp \
+            src/BeatParser.cpp \
+            src/DataManager.cpp \
+            src/SongAnalyzer.cpp \
+            src/ChartPackage.cpp \
+            src/AchievementSystem.cpp \
+            -Lsfml3/lib \
+            -lsfml-graphics -lsfml-window -lsfml-system -lsfml-audio \
+            -lwinmm -lopengl32 -lgdi32 -lfreetype
+          
+          echo "=== BUILD OK ==="
+          ls -la BeatPixel.exe
 
-      - name: Package
-        shell: bash
+      - name: Collect release files
+        shell: pwsh
         run: |
-          mkdir -p dist
-          cp BeatPixel.exe dist/
-          cp sfml/bin/sfml-*.dll dist/ 2>/dev/null || true
-          cp sfml/bin/openal*.dll dist/ 2>/dev/null || true
-          cp -r assets dist/ 2>/dev/null || true
-          cp -r songs dist/ 2>/dev/null || true
-          echo "双击 BeatPixel.exe 运行游戏" > dist/运行说明.txt
-          echo "=== 文件列表 ==="
-          ls -la dist/
+          New-Item -ItemType Directory -Path release/BeatPixel -Force
+          
+          # Copy exe
+          Copy-Item BeatPixel.exe release/BeatPixel/
+          
+          # Copy SFML DLLs
+          Copy-Item sfml3/bin/sfml-*.dll release/BeatPixel/
+          Copy-Item sfml3/bin/OpenAL32.dll release/BeatPixel/ -ErrorAction SilentlyContinue
+          
+          # Copy assets
+          Copy-Item -Recurse assets/sounds release/BeatPixel/assets/sounds -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path release/BeatPixel/songs -Force
+          
+          # Copy readme
+          Copy-Item README_WINDOWS.txt release/BeatPixel/ -ErrorAction SilentlyContinue
+          
+          Write-Host "Release folder:"
+          Get-ChildItem release/BeatPixel/ -Recurse
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: BeatPixel-Windows
-          path: dist/
-          retention-days: 90
+          path: release/BeatPixel/
+          retention-days: 30
