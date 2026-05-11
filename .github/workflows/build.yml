@@ -9,40 +9,34 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
+      - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
           update: true
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-openal
-            mingw-w64-x86_64-freetype
-            mingw-w64-x86_64-flac
-            mingw-w64-x86_64-libvorbis
-            mingw-w64-x86_64-libogg
-            base-devel
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-openal mingw-w64-x86_64-freetype mingw-w64-x86_64-flac mingw-w64-x86_64-libvorbis mingw-w64-x86_64-libogg base-devel
 
-      - name: Verify compiler
-        shell: msys2 {0}
+      - name: Test g++ works
+        run: g++ --version
+
+      - name: Test SFML download
         run: |
-          g++ --version
-          which g++
+          echo "Testing network..."
+          curl -sI "https://www.sfml-dev.org" | head -1
 
-      - name: Download & extract SFML 3
-        shell: msys2 {0}
+      - name: Get SFML 3
         run: |
           curl -L -o sfml3.zip "https://www.sfml-dev.org/files/SFML-3.0.0-windows-gcc-14.2.0-mingw-64-bit.zip"
           unzip -q sfml3.zip
           mv SFML-* sfml3
-          ls sfml3/include/SFML/Graphics.hpp
+          ls sfml3/lib/libsfml-graphics.a
 
       - name: Compile
-        shell: msys2 {0}
         run: |
           g++ -std=c++17 -O2 -Wall \
             -Isrc -Isfml3/include -DBEATPIXEL_USE_SFML \
@@ -62,46 +56,24 @@ jobs:
             -lsfml-graphics -lsfml-window -lsfml-system -lsfml-audio \
             -lwinmm -lopengl32 -lgdi32 -lfreetype \
             -static-libgcc -static-libstdc++
+          echo "BUILD OK"
+          ls -la BeatPixel.exe
 
-      - name: Package
-        shell: msys2 {0}
+      - name: Package to ZIP
         run: |
           mkdir -p pkg/BeatPixel/assets/sounds
           mkdir -p pkg/BeatPixel/songs
-          
-          # exe
           cp BeatPixel.exe pkg/BeatPixel/
-          
-          # SFML DLLs
-          cp sfml3/bin/sfml-*.dll pkg/BeatPixel/
-          cp sfml3/bin/OpenAL32.dll pkg/BeatPixel/ 2>/dev/null || true
-          
-          # Audio DLLs from MSYS2
+          cp sfml3/bin/sfml-*.dll pkg/BeatPixel/ 2>/dev/null || true
           cp /mingw64/bin/OpenAL32.dll pkg/BeatPixel/ 2>/dev/null || true
           cp /mingw64/bin/libFLAC*.dll pkg/BeatPixel/ 2>/dev/null || true
           cp /mingw64/bin/libvorbis*.dll pkg/BeatPixel/ 2>/dev/null || true
           cp /mingw64/bin/libogg*.dll pkg/BeatPixel/ 2>/dev/null || true
-          
-          # assets
           cp -r assets/sounds/* pkg/BeatPixel/assets/sounds/ 2>/dev/null || true
-          
-          # readme
-          cat > pkg/BeatPixel/使用说明.txt << 'EOF'
-          BeatPixel - 节拍像素 v3.1
-          ==========================
-          双击 BeatPixel.exe 即可运行
-          
-          按键：D F J K L ; 六键
-          ESC 返回  ↑↓Enter 导航
-          
-          将 MP3 放入 songs 文件夹游玩
-          EOF
-          
-          echo "=== DONE ==="
+          printf '双击 BeatPixel.exe 运行\n按键: D F J K L ; 六键\n' > pkg/BeatPixel/使用说明.txt
           ls -la pkg/BeatPixel/
 
-      - name: Upload
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: BeatPixel
           path: pkg/BeatPixel/
