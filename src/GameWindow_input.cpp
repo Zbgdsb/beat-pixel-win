@@ -545,6 +545,11 @@ void GameWindow::handleInput() {
             keyFeedback[i].glowTimer = KeyFeedback::GLOW_DURATION;
 
             if (!keyWasPressed[i]) {
+                // V3.5: 打击乐模式按键即时发声
+                if (audioManager.getSoundPack() == 1) {
+                    audioManager.playHit(true, i);
+                }
+
                 int comboBefore = scoreSystem.getCurrentCombo();
 
                 NoteTrack::JudgeResult result = tracks[i]->handlePress(currentTime);

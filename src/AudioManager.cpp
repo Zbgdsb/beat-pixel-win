@@ -58,8 +58,9 @@ std::vector<int16_t> AudioManager::generateKick(float duration, int sampleRate, 
     std::vector<int16_t> samples(numSamples);
     for (int i = 0; i < numSamples; i++) {
         float t = (float)i / sampleRate;
-        float envelope = std::exp(-t * 20.0f); // 快速衰减
-        float freq = 150.0f * std::exp(-t * 15.0f); // 频率快速下降（bass drum特征）
+        float envelope = std::exp(-t * 18.0f);
+        // 频率从80Hz快速降到40Hz，典型的bass drum下扫
+        float freq = 80.0f * std::exp(-t * 8.0f) + 40.0f;
         float value = volume * envelope * std::sin(2.0f * M_PI * freq * t);
         samples[i] = (int16_t)(value * 32000.0f);
     }
@@ -69,16 +70,15 @@ std::vector<int16_t> AudioManager::generateKick(float duration, int sampleRate, 
 std::vector<int16_t> AudioManager::generateSnare(float duration, int sampleRate, float volume) {
     int numSamples = (int)(sampleRate * duration);
     std::vector<int16_t> samples(numSamples);
-    // 用静态随机种子产生一致的噪声
     unsigned int seed = 12345;
     for (int i = 0; i < numSamples; i++) {
         float t = (float)i / sampleRate;
-        float envelope = std::exp(-t * 25.0f);
-        // 噪声 + 低频共振
+        float envelope = std::exp(-t * 20.0f);
         seed = seed * 1103515245 + 12345;
         float noise = ((seed >> 16) & 0x7FFF) / 32768.0f - 0.5f;
-        float tone = std::sin(2.0f * M_PI * 200.0f * t) * 0.3f;
-        float value = volume * envelope * (noise * 0.7f + tone);
+        // snare: 噪声为主 + 200Hz body tone
+        float tone = std::sin(2.0f * M_PI * 200.0f * t) * 0.4f;
+        float value = volume * envelope * (noise * 0.8f + tone);
         samples[i] = (int16_t)(value * 32000.0f);
     }
     return samples;
@@ -90,10 +90,13 @@ std::vector<int16_t> AudioManager::generateHihat(float duration, int sampleRate,
     unsigned int seed = 67890;
     for (int i = 0; i < numSamples; i++) {
         float t = (float)i / sampleRate;
-        float envelope = std::exp(-t * 40.0f); // 极快衰减
+        float envelope = std::exp(-t * 50.0f); // 极快衰减，金属质感
         seed = seed * 1103515245 + 12345;
         float noise = ((seed >> 16) & 0x7FFF) / 32768.0f - 0.5f;
-        float value = volume * envelope * noise;
+        // 高通滤波效果：减去低频成分
+        float prev = (i > 0) ? ((seed * 1103515245 + 12345 >> 16 & 0x7FFF) / 32768.0f - 0.5f) : noise;
+        float hp = noise - prev * 0.3f;
+        float value = volume * envelope * hp;
         samples[i] = (int16_t)(value * 32000.0f);
     }
     return samples;
@@ -104,8 +107,10 @@ std::vector<int16_t> AudioManager::generateTom(float freq, float duration, int s
     std::vector<int16_t> samples(numSamples);
     for (int i = 0; i < numSamples; i++) {
         float t = (float)i / sampleRate;
-        float envelope = std::exp(-t * 12.0f);
-        float value = volume * envelope * std::sin(2.0f * M_PI * freq * t);
+        float envelope = std::exp(-t * 10.0f);
+        // tom: 频率微降，有pitch bend效果
+        float f = freq * (1.0f - 0.15f * t);
+        float value = volume * envelope * std::sin(2.0f * M_PI * f * t);
         samples[i] = (int16_t)(value * 32000.0f);
     }
     return samples;
@@ -214,21 +219,25 @@ bool AudioManager::generateSFX() {
         auto kickData = generateKick(0.15f, SAMPLE_RATE, SFX_VOLUME * 0.9f);
         if (!loadBuffer(trackBuffers[0], kickData)) return false;
         trackSounds[0] = std::make_unique<sf::Sound>(trackBuffers[0]);
+        printf("[SFX] kick samples=%zu\n", kickData.size()); fflush(stdout);
 
         // Track 1 (S): Snare 军鼓
         auto snareData = generateSnare(0.12f, SAMPLE_RATE, SFX_VOLUME * 0.85f);
         if (!loadBuffer(trackBuffers[1], snareData)) return false;
         trackSounds[1] = std::make_unique<sf::Sound>(trackBuffers[1]);
+        printf("[SFX] snare samples=%zu\n", snareData.size()); fflush(stdout);
 
         // Track 2 (D): Hi-hat 踩镲
         auto hihatData = generateHihat(0.06f, SAMPLE_RATE, SFX_VOLUME * 0.7f);
         if (!loadBuffer(trackBuffers[2], hihatData)) return false;
         trackSounds[2] = std::make_unique<sf::Sound>(trackBuffers[2]);
+        printf("[SFX] hihat samples=%zu\n", hihatData.size()); fflush(stdout);
 
         // Track 3 (F): Tom 嗵鼓
         auto tomData = generateTom(250.0f, 0.13f, SAMPLE_RATE, SFX_VOLUME * 0.8f);
         if (!loadBuffer(trackBuffers[3], tomData)) return false;
         trackSounds[3] = std::make_unique<sf::Sound>(trackBuffers[3]);
+        printf("[SFX] tom samples=%zu\n", tomData.size()); fflush(stdout);
 
         // Perfect/Miss保留作为通用音效
         auto perfectData = generateSnare(0.10f, SAMPLE_RATE, SFX_VOLUME * 0.95f);
@@ -343,7 +352,7 @@ bool AudioManager::playOriginalSong(const std::string& filePath) {
  */
 void AudioManager::playHit(bool isPerfect, int track) {
     if (soundPack == 1 && track >= 0 && track < 4 && trackSounds[track]) {
-        // 打击乐模式：每个轨道独立鼓声
+        // 打击乐模式：任何判定都用轨道鼓声
         trackSounds[track]->stop();
         trackSounds[track]->play();
     } else if (isPerfect && perfectSound) {
