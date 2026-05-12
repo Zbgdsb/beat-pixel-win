@@ -17,9 +17,6 @@ Thumbs.db
 *.tmp
 *.log
 *.dat
-songs/*.mp3
-songs/*.chart.json
-songs/*.beatpixel
 achievements.dat
 config.ini
 build/
