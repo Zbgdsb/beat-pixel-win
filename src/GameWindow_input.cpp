@@ -1829,47 +1829,31 @@ void GameWindow::startSelectedSong(SongListItem& selected) {
         return;
     }
 
-    // 有预置谱面 → 直接加载，跳过音频分析
+    // 有预置谱面 → 加载谱面，进入分析确认界面（ANALYZING → DELEGATE → PLAYING）
     if (selected.hasChart) {
         std::string chartPath = selected.filePath + ".chart.json";
         if (loadChartFromFile(chartPath, selected.filePath)) {
-            tracks.clear();
-            scoreSystem.reset();
-            initTracks();
-            loadSongForPlaying();
-            // loadSongForPlaying 不会自动开始，需要手动启动
-            gameStartTime = GetTickCount64();
-            currentTime = 0;
-            gameState = PLAYING;
-            prevCombo = 0;
-            hitAnims.clear();
-            textAnims.clear();
-            audioManager.playBGM();
+            manualBPM = analysisResult.bpm;
+            manualOffset = 0;
+            analysisDone = true;
+            analysisJustOpened = true;
+            analysisFilePath = selected.filePath;
+            gameState = ANALYZING;
             return;
         }
         // 谱面加载失败 → 退回歌曲列表
-        printf("[GameWindow] 谱面加载失败，退回列表\n");
+        printf("[GameWindow] 谱面加载失败: %s\n", chartPath.c_str());
+        fflush(stdout);
         isShowingSongList = true;
         return;
     }
 
-    // 无预置谱面 → 尝试分析MP3
-    analysisFilePath = selected.filePath;
-    currentSongName = selected.name;
-    SongAnalyzer analyzer;
-    analysisResult = analyzer.analyze(selected.filePath);
-    if (analysisResult.success) {
-        manualBPM = analysisResult.bpm;
-        manualOffset = 0;
-        analysisDone = true;
-        analysisJustOpened = true;
-        gameState = ANALYZING;
-    } else {
-        // 分析失败（无ffmpeg等）→ 退回歌曲列表
-        printf("[GameWindow] 音频分析失败: %s（需要安装ffmpeg或放入.chart.json谱面文件）\n",
-               selected.filePath.c_str());
-        isShowingSongList = true;
-    }
+    // 无预置谱面 → 不调用analyze()（sf::InputSoundFile解码MP3会崩溃）
+    // 提示用户需要 .chart.json 谱面文件 或 安装ffmpeg
+    printf("[GameWindow] 歌曲 '%s' 无谱面文件且无ffmpeg，跳过分析\n", selected.name.c_str());
+    printf("[GameWindow] 请放入 %s 或安装ffmpeg到系统PATH\n", (selected.filePath + ".chart.json").c_str());
+    fflush(stdout);
+    isShowingSongList = true;
 }
 
 void GameWindow::refreshSongList() {
