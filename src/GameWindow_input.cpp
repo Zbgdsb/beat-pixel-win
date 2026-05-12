@@ -1848,12 +1848,25 @@ void GameWindow::startSelectedSong(SongListItem& selected) {
         return;
     }
 
-    // 无预置谱面 → 不调用analyze()（sf::InputSoundFile解码MP3会崩溃）
-    // 提示用户需要 .chart.json 谱面文件 或 安装ffmpeg
-    printf("[GameWindow] 歌曲 '%s' 无谱面文件且无ffmpeg，跳过分析\n", selected.name.c_str());
-    printf("[GameWindow] 请放入 %s 或安装ffmpeg到系统PATH\n", (selected.filePath + ".chart.json").c_str());
-    fflush(stdout);
-    isShowingSongList = true;
+    // 无预置谱面 → 尝试分析MP3（需要ffmpeg在PATH中）
+    analysisFilePath = selected.filePath;
+    currentSongName = selected.name;
+    SongAnalyzer analyzer;
+    analysisResult = analyzer.analyze(selected.filePath);
+    if (analysisResult.success) {
+        manualBPM = analysisResult.bpm;
+        manualOffset = 0;
+        analysisDone = true;
+        analysisJustOpened = true;
+        gameState = ANALYZING;
+    } else {
+        // 分析失败（无ffmpeg等）→ 退回歌曲列表
+        printf("[GameWindow] 音频分析失败: %s\n", selected.filePath.c_str());
+        printf("[GameWindow] 需要安装ffmpeg: https://ffmpeg.org/download.html\n");
+        printf("[GameWindow] 或放入预置谱面: %s\n", (selected.filePath + ".chart.json").c_str());
+        fflush(stdout);
+        isShowingSongList = true;
+    }
 }
 
 void GameWindow::refreshSongList() {

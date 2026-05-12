@@ -957,35 +957,43 @@ bool SongAnalyzer::exportChart(const std::string& filePath, const AnalysisResult
 // ========== 工具函数 ==========
 
 bool SongAnalyzer::loadAudio(const std::string& filePath) {
-    // 先尝试SFML直接加载
-    sf::InputSoundFile file;
-    if (file.openFromFile(filePath)) {
-        sampleRate = file.getSampleRate();
-        unsigned int channelCount = file.getChannelCount();
-        std::uint64_t totalFrames = file.getSampleCount() / channelCount;
-        if (sampleRate > 0 && channelCount > 0 && totalFrames > 0) {
-            const size_t BUFFER_FRAMES = 4096;
-            std::vector<int16_t> rawBuffer(BUFFER_FRAMES * channelCount);
-            samples.clear();
-            samples.reserve((size_t)totalFrames);
-            std::uint64_t framesRead = 0;
-            while (framesRead < totalFrames) {
-                std::uint64_t toRead = std::min((std::uint64_t)BUFFER_FRAMES, totalFrames - framesRead);
-                std::uint64_t actuallyRead = file.read(rawBuffer.data(), toRead);
-                if (actuallyRead == 0) break;
-                for (std::uint64_t i = 0; i < actuallyRead; i++) {
-                    float sum = 0;
-                    for (unsigned int ch = 0; ch < channelCount; ch++)
-                        sum += rawBuffer[i * channelCount + ch];
-                    samples.push_back(sum / (channelCount * 32768.0f));
+    // 检测扩展名，MP3跳过sf::InputSoundFile（SFML 3.0解码MP3会崩溃而非返回false）
+    std::string ext;
+    size_t dotPos = filePath.find_last_of('.');
+    if (dotPos != std::string::npos) ext = filePath.substr(dotPos);
+    bool isMp3 = (ext == ".mp3" || ext == ".MP3");
+
+    if (!isMp3) {
+        // 非MP3：尝试SFML直接加载（WAV/OGG/FLAC等）
+        sf::InputSoundFile file;
+        if (file.openFromFile(filePath)) {
+            sampleRate = file.getSampleRate();
+            unsigned int channelCount = file.getChannelCount();
+            std::uint64_t totalFrames = file.getSampleCount() / channelCount;
+            if (sampleRate > 0 && channelCount > 0 && totalFrames > 0) {
+                const size_t BUFFER_FRAMES = 4096;
+                std::vector<int16_t> rawBuffer(BUFFER_FRAMES * channelCount);
+                samples.clear();
+                samples.reserve((size_t)totalFrames);
+                std::uint64_t framesRead = 0;
+                while (framesRead < totalFrames) {
+                    std::uint64_t toRead = std::min((std::uint64_t)BUFFER_FRAMES, totalFrames - framesRead);
+                    std::uint64_t actuallyRead = file.read(rawBuffer.data(), toRead);
+                    if (actuallyRead == 0) break;
+                    for (std::uint64_t i = 0; i < actuallyRead; i++) {
+                        float sum = 0;
+                        for (unsigned int ch = 0; ch < channelCount; ch++)
+                            sum += rawBuffer[i * channelCount + ch];
+                        samples.push_back(sum / (channelCount * 32768.0f));
+                    }
+                    framesRead += actuallyRead;
                 }
-                framesRead += actuallyRead;
+                if (!samples.empty()) return true;
             }
-            if (!samples.empty()) return true;
         }
     }
 
-    // SFML不支持该格式，用ffmpeg转换
+    // MP3 或 SFML不支持该格式，用ffmpeg转换
     printf("[SongAnalyzer] SFML不支持该格式，使用ffmpeg转换...\n");
     fflush(stdout);
 
