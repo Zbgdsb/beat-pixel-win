@@ -16,6 +16,14 @@
 #else
 #include <io.h>
 #include <windows.h>
+
+// 优先用exe同目录下的ffmpeg.exe，没有则回退到系统PATH
+static std::string resolveFfmpegPath(const std::string& resourceDir) {
+    std::string bundled = resourceDir + "/ffmpeg.exe";
+    FILE* fp = fopen(bundled.c_str(), "rb");
+    if (fp) { fclose(fp); return bundled; }
+    return "ffmpeg";
+}
 #endif
 
 static const int SAMPLE_RATE = 44100;
@@ -409,7 +417,8 @@ bool AudioManager::playOriginalSong(const std::string& filePath) {
 #endif
 
 #ifdef _WIN32
-    std::string cmd = "ffmpeg -y -i \"" + filePath + "\" -ar 44100 -ac 2 -f wav \"" + tmpPath + "\" >NUL 2>&1";
+    std::string ffp = resolveFfmpegPath(m_resourceDir);
+    std::string cmd = ffp + " -y -i \"" + filePath + "\" -ar 44100 -ac 2 -f wav \"" + tmpPath + "\" >NUL 2>&1";
 #else
     std::string cmd = "ffmpeg -y -i '" + filePath + "' -ar 44100 -ac 2 -f wav '" + tmpPath + "' 2>/dev/null";
 #endif

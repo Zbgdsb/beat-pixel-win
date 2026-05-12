@@ -39,7 +39,13 @@
 
 // V3.3: 获取可执行文件目录
 static std::string getExeDir() {
-#ifndef _WIN32
+#ifdef _WIN32
+    char buf[MAX_PATH];
+    GetModuleFileNameA(NULL, buf, MAX_PATH);
+    char* slash = strrchr(buf, '\\');
+    if (slash) *slash = '\0';
+    return std::string(buf);
+#elif defined(__APPLE__)
     char path[1024];
     uint32_t size = sizeof(path);
     if (_NSGetExecutablePath(path, &size) == 0) {
@@ -47,8 +53,18 @@ static std::string getExeDir() {
         if (slash) *slash = '\0';
         return std::string(path);
     }
-#endif
     return ".";
+#else
+    return ".";
+#endif
+}
+
+// 获取ffmpeg路径：优先用exe同目录下的ffmpeg.exe，没有则回退到系统PATH
+static std::string getFfmpegPath() {
+    std::string bundled = getExeDir() + "/ffmpeg.exe";
+    FILE* fp = fopen(bundled.c_str(), "rb");
+    if (fp) { fclose(fp); return bundled; }
+    return "ffmpeg";  // fallback: 系统PATH
 }
 
 // ========== 常量 ==========
@@ -410,9 +426,11 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsFallback() {
 #endif
 
 #ifdef _WIN32
-    std::string cmd = "ffmpeg -y -i \"" + currentFilePath + "\" -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " \"" + tmpPcm + "\" >NUL 2>&1";
+    std::string ffp = getFfmpegPath();
+    std::string cmd = ffp + " -y -i \"" + currentFilePath + "\" -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " \"" + tmpPcm + "\" >NUL 2>&1";
 #else
-    std::string cmd = "ffmpeg -y -i '" + currentFilePath + "' -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " '" + tmpPcm + "' 2>/dev/null";
+    std::string ffp = getFfmpegPath();
+    std::string cmd = ffp + " -y -i '" + currentFilePath + "' -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " '" + tmpPcm + "' 2>/dev/null";
 #endif
     int ret = system(cmd.c_str());
     if (ret != 0) {
@@ -1013,9 +1031,11 @@ bool SongAnalyzer::loadAudio(const std::string& filePath) {
 #endif
 
 #ifdef _WIN32
-    std::string cmd = "ffmpeg -y -i \"" + filePath + "\" -ar 44100 -ac 1 -f wav \"" + tmpPath + "\" >NUL 2>&1";
+    std::string ffp = getFfmpegPath();
+    std::string cmd = ffp + " -y -i \"" + filePath + "\" -ar 44100 -ac 1 -f wav \"" + tmpPath + "\" >NUL 2>&1";
 #else
-    std::string cmd = "ffmpeg -y -i '" + filePath + "' -ar 44100 -ac 1 -f wav '" + tmpPath + "' 2>/dev/null";
+    std::string ffp = getFfmpegPath();
+    std::string cmd = ffp + " -y -i '" + filePath + "' -ar 44100 -ac 1 -f wav '" + tmpPath + "' 2>/dev/null";
 #endif
     int ret = system(cmd.c_str());
     if (ret != 0) {

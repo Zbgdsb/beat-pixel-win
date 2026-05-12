@@ -53,6 +53,15 @@ jobs:
             winmm.lib opengl32.lib gdi32.lib freetype.lib user32.lib
           if ($LASTEXITCODE -eq 0) { Write-Host "BUILD OK" } else { exit 1 }
 
+      - name: Download ffmpeg
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp
+          $ffDir = Get-ChildItem ffmpeg_tmp -Directory | Select-Object -First 1
+          Copy-Item "$($ffDir.FullName)/bin/ffmpeg.exe" ffmpeg.exe
+          Write-Host "ffmpeg.exe size: $((Get-Item ffmpeg.exe).Length) bytes"
+
       - name: Package
         shell: pwsh
         run: |
@@ -66,6 +75,7 @@ jobs:
           Copy-Item songs/*.mp3 pkg/BeatPixel/songs/ -ErrorAction SilentlyContinue
           Copy-Item songs/*.json pkg/BeatPixel/songs/ -ErrorAction SilentlyContinue
           Copy-Item songs/*.beatpixel pkg/BeatPixel/songs/ -ErrorAction SilentlyContinue
+          Copy-Item ffmpeg.exe pkg/BeatPixel/
           @"
           BeatPixel - 节拍像素 v3.1
           =========================
