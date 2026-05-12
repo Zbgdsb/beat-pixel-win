@@ -56,11 +56,16 @@ jobs:
       - name: Package
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Path pkg/BeatPixel/assets/textures -Force
           New-Item -ItemType Directory -Path pkg/BeatPixel/assets/sounds -Force
           New-Item -ItemType Directory -Path pkg/BeatPixel/songs -Force
           Copy-Item BeatPixel.exe pkg/BeatPixel/
           Copy-Item sfml3/bin/*.dll pkg/BeatPixel/
+          Copy-Item -Recurse assets/textures/* pkg/BeatPixel/assets/textures/
           Copy-Item -Recurse assets/sounds/* pkg/BeatPixel/assets/sounds/ -ErrorAction SilentlyContinue
+          Copy-Item songs/*.mp3 pkg/BeatPixel/songs/ -ErrorAction SilentlyContinue
+          Copy-Item songs/*.json pkg/BeatPixel/songs/ -ErrorAction SilentlyContinue
+          Copy-Item songs/*.beatpixel pkg/BeatPixel/songs/ -ErrorAction SilentlyContinue
           @"
           BeatPixel - 节拍像素 v3.1
           =========================
