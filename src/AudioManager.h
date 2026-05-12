@@ -10,66 +10,9 @@
 #ifndef BEATPIXEL_USE_SFML
 #include "graphics.h"
 #else
-// SFML编译时：提供Audio stub，跳过音频
+// SFML编译时：使用真实SFML Audio模块
 #define NOMINMAX
-#include <windows.h>
-#include <io.h>
-#include <cstdint>
-#include <vector>
-#include <memory>
-#include <string>
-#include <cstring>
-#include <cmath>
-namespace sf {
-    enum class SoundChannel { Mono, FrontLeft, FrontRight, FrontCenter, RearLeft, RearRight };
-    class SoundBuffer {
-    public:
-        // SFML 3.0 signature: data, count, channelCount, sampleRate, channelMap
-        bool loadFromSamples(const int16_t*, size_t, unsigned int, unsigned int, const std::vector<sf::SoundChannel>&) { return true; }
-        bool loadFromFile(const std::string&) { return true; }
-        int64_t getSampleCount() const { return 0; }
-        unsigned int getSampleRate() const { return 44100; }
-        unsigned int getChannelCount() const { return 1; }
-    };
-    class Sound {
-    public:
-        Sound() = default;
-        Sound(const SoundBuffer&) {}
-        void play() {}
-        void pause() {}
-        void stop() {}
-        void setPlayingOffset(int64_t) {}
-        void setVolume(float) {}
-        void setLooping(bool) {}
-        int getStatus() const { return 0; }
-    };
-    class Music {
-    public:
-        Music() = default;
-        ~Music() = default;
-        Music(const Music&) = delete;
-        Music& operator=(const Music&) = delete;
-        Music(Music&&) = default;
-        Music& operator=(Music&&) = default;
-        bool openFromFile(const std::string&) { return true; }
-        void play() {}
-        void pause() {}
-        void stop() {}
-        void setVolume(float) {}
-        void setLooping(bool) {}
-        void setPlayingOffset(int64_t) {}
-        int getStatus() const { return 0; }
-        int64_t getDuration() const { return 0; }
-    };
-    class InputSoundFile {
-    public:
-        bool openFromFile(const std::string&) { return true; }
-        size_t read(int16_t* d, size_t max) { if(d) memset(d,0,max*sizeof(int16_t)); return max; }
-        int64_t getSampleCount() const { return 0; }
-        unsigned int getSampleRate() const { return 44100; }
-        unsigned int getChannelCount() const { return 1; }
-    };
-}
+#include <SFML/Audio.hpp>
 #endif
 #else
 #include <SFML/Audio.hpp>

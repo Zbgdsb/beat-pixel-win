@@ -13,6 +13,8 @@
 
 #ifndef _WIN32
 #include <unistd.h>
+#else
+#include <io.h>
 #endif
 
 static const int SAMPLE_RATE = 44100;
@@ -405,7 +407,11 @@ bool AudioManager::playOriginalSong(const std::string& filePath) {
     close(tmpFd);
 #endif
 
+#ifdef _WIN32
+    std::string cmd = "ffmpeg -y -i \"" + filePath + "\" -ar 44100 -ac 2 -f wav \"" + tmpPath + "\" >NUL 2>&1";
+#else
     std::string cmd = "ffmpeg -y -i '" + filePath + "' -ar 44100 -ac 2 -f wav '" + tmpPath + "' 2>/dev/null";
+#endif
     int ret = system(cmd.c_str());
     if (ret != 0) {
         remove(tmpPath);

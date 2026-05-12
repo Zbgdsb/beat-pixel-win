@@ -36,7 +36,7 @@ jobs:
       - name: Compile
         shell: pwsh
         run: |
-          cl /std:c++17 /O2 /EHsc /Isrc /Isfml3/include /DBEATPIXEL_USE_SFML /FeBeatPixel.exe `
+          cl /MT /std:c++17 /O2 /EHsc /Isrc /Isfml3/include /DBEATPIXEL_USE_SFML /FeBeatPixel.exe `
             src/main.cpp `
             src/GameWindow.cpp `
             src/NoteTrack.cpp `
