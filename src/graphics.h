@@ -318,6 +318,10 @@ typedef short SHORT;
 #endif
 #endif
 
+// windows.h有RGB/COLORREF宏, MSVC下需要#undef再提供兼容函数
+#ifdef RGB
+#undef RGB
+#endif
 inline COLORREF RGB(int r, int g, int b) {
     return (0xFF << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
 }
