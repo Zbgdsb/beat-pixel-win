@@ -16,13 +16,15 @@
 #endif
 
 #ifdef _WIN32
+#include <direct.h>
+#include <io.h>
 #define popen _popen
 #define pclose _pclose
-// Windows没有mkdtemp，用_tmpnam替代
+// Windows没有mkdtemp，用_mktemp_s+_mkdir替代
 inline char* mkdtemp(char* tpl) {
-    char* r = _mktemp_s(tpl, strlen(tpl) + 1) ? nullptr : tpl;
-    if (r) _mkdir(r);
-    return r;
+    if (_mktemp_s(tpl, strlen(tpl) + 1) != 0) return nullptr;
+    if (_mkdir(tpl) != 0) return nullptr;
+    return tpl;
 }
 #endif
 
