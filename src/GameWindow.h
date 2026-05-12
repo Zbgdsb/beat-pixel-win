@@ -144,6 +144,8 @@ private:
     int trackDelegateSel = 0;        // 代管选轨光标
     float mouseX = 0, mouseY = 0;       // 当前鼠标坐标（悬浮高亮）
     void refreshSongList();         // 扫描songs目录生成列表
+    bool loadChartFromFile(const std::string& chartPath, const std::string& mp3Path);  // 从.chart.json加载谱面
+    void startSelectedSong(SongListItem& selected);  // 统一选歌启动入口
 
     GameState gameState;
     long long gameStartTime;
