@@ -10,6 +10,7 @@
 #else
 #include "AudioManager.h"
 #include <io.h>
+#include <windows.h>
 #endif
 #else
 #include <SFML/Audio.hpp>
