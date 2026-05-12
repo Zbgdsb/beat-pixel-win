@@ -18,10 +18,13 @@
 #include <cstring>
 #include <cmath>
 namespace sf {
+    enum class SoundChannel { Mono, FrontLeft, FrontRight, FrontCenter, RearLeft, RearRight };
     class SoundBuffer {
     public:
-        bool loadFromSamples(const int16_t*, size_t, int, int) { return true; }
-        int getSampleCount() const { return 0; }
+        // SFML 3.0 signature: data, count, channelCount, sampleRate, channelMap
+        bool loadFromSamples(const int16_t*, size_t, unsigned int, unsigned int, const std::vector<sf::SoundChannel>&) { return true; }
+        bool loadFromFile(const std::string&) { return true; }
+        int64_t getSampleCount() const { return 0; }
         unsigned int getSampleRate() const { return 44100; }
         unsigned int getChannelCount() const { return 1; }
     };

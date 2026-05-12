@@ -393,10 +393,17 @@ bool AudioManager::playOriginalSong(const std::string& filePath) {
     printf("[AudioManager] 格式不支持，用ffmpeg转换...\n");
     fflush(stdout);
 
+#ifdef _WIN32
+    char tmpPath[MAX_PATH];
+    GetTempPathA(MAX_PATH, tmpPath);
+    strcat(tmpPath, "beatpixel_bgm_XXXXXX.wav");
+    _mktemp_s(tmpPath, strlen(tmpPath) + 1);
+#else
     char tmpPath[] = "/tmp/beatpixel_bgm_XXXXXX.wav";
     int tmpFd = mkstemps(tmpPath, 4);
     if (tmpFd < 0) return false;
     close(tmpFd);
+#endif
 
     std::string cmd = "ffmpeg -y -i '" + filePath + "' -ar 44100 -ac 2 -f wav '" + tmpPath + "' 2>/dev/null";
     int ret = system(cmd.c_str());
