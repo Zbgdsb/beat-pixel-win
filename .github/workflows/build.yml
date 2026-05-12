@@ -42,7 +42,7 @@ jobs:
             src/AchievementSystem.cpp `
             /link /LIBPATH:sfml3/lib `
             sfml-graphics.lib sfml-window.lib sfml-system.lib sfml-audio.lib `
-            winmm.lib opengl32.lib gdi32.lib freetype.lib
+            winmm.lib opengl32.lib gdi32.lib freetype.lib user32.lib
           if ($LASTEXITCODE -eq 0) { Write-Host "BUILD OK" } else { exit 1 }
 
       - name: Package
