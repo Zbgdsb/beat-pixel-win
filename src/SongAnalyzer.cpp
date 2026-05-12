@@ -26,6 +26,9 @@
 #include <cstring>
 #ifndef _WIN32
 #include <unistd.h>
+#else
+#define popen _popen
+#define pclose _pclose
 #endif
 
 #ifndef M_PI
@@ -34,6 +37,7 @@
 
 // V3.3: 获取可执行文件目录
 static std::string getExeDir() {
+#ifndef _WIN32
     char path[1024];
     uint32_t size = sizeof(path);
     if (_NSGetExecutablePath(path, &size) == 0) {
@@ -41,6 +45,7 @@ static std::string getExeDir() {
         if (slash) *slash = '\0';
         return std::string(path);
     }
+#endif
     return ".";
 }
 
@@ -390,10 +395,17 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsViaPython() {
 std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsFallback() {
     // Step 1: 用ffmpeg转PCM (16-bit, mono, 22050Hz)
     const int SR = 22050;
+#ifdef _WIN32
+    char tmpPcm[MAX_PATH];
+    GetTempPathA(MAX_PATH, tmpPcm);
+    strcat(tmpPcm, "beatpixel_pcm_XXXXXX.pcm");
+    _mktemp_s(tmpPcm, strlen(tmpPcm) + 1);
+#else
     char tmpPcm[] = "/tmp/beatpixel_pcm_XXXXXX.pcm";
     int tmpFd = mkstemps(tmpPcm, 4);
     if (tmpFd < 0) return {};
     close(tmpFd);
+#endif
 
     std::string cmd = "ffmpeg -y -i '" + currentFilePath + "' -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " '" + tmpPcm + "' 2>/dev/null";
     int ret = system(cmd.c_str());
@@ -971,6 +983,12 @@ bool SongAnalyzer::loadAudio(const std::string& filePath) {
     printf("[SongAnalyzer] SFML不支持该格式，使用ffmpeg转换...\n");
     fflush(stdout);
 
+#ifdef _WIN32
+    char tmpPath[MAX_PATH];
+    GetTempPathA(MAX_PATH, tmpPath);
+    strcat(tmpPath, "beatpixel_convert_XXXXXX.wav");
+    _mktemp_s(tmpPath, strlen(tmpPath) + 1);
+#else
     char tmpPath[] = "/tmp/beatpixel_convert_XXXXXX.wav";
     int tmpFd = mkstemps(tmpPath, 4);
     if (tmpFd < 0) {
@@ -978,6 +996,7 @@ bool SongAnalyzer::loadAudio(const std::string& filePath) {
         return false;
     }
     close(tmpFd);
+#endif
 
     std::string cmd = "ffmpeg -y -i '" + filePath + "' -ar 44100 -ac 1 -f wav '" + tmpPath + "' 2>/dev/null";
     int ret = system(cmd.c_str());

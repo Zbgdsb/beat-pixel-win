@@ -11,6 +11,8 @@
 #include "graphics.h"
 #else
 // SFML编译时：提供Audio stub，跳过音频
+#include <windows.h>
+#include <io.h>
 #include <cstdint>
 #include <vector>
 #include <memory>
