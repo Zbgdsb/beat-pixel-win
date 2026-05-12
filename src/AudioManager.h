@@ -11,6 +11,7 @@
 #include "graphics.h"
 #else
 // SFML编译时：提供Audio stub，跳过音频
+#define NOMINMAX
 #include <windows.h>
 #include <io.h>
 #include <cstdint>
