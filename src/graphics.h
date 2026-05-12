@@ -214,9 +214,13 @@ namespace sf {
 
 #else
 // macOS/Linux平台：通过SFML实现EasyX兼容接口
+// Windows+SFML：需要windows.h提供原生API, 避免重复定义
 
 #include <SFML/Graphics.hpp>
 #include <SFML/Window.hpp>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <string>
 #include <cstring>
 #include <cmath>
@@ -227,8 +231,12 @@ namespace sf {
 
 // ========== EasyX常量定义 ==========
 #define PS_SOLID 0
+#ifndef VK_ESCAPE
 #define VK_ESCAPE 27
+#endif
+#ifndef VK_RETURN
 #define VK_RETURN 13
+#endif
 
 // ========== 全局SFML窗口和状态 =/
 namespace _easyx_impl {
@@ -295,6 +303,7 @@ namespace _easyx_impl {
 }
 
 // ========== EasyX类型定义 =/
+#ifndef _WIN32
 #ifndef COLORREF
 typedef unsigned int COLORREF;
 #endif
@@ -302,8 +311,11 @@ typedef unsigned int COLORREF;
 typedef unsigned long DWORD;
 #endif
 typedef short SHORT;
+#endif
+#ifndef _WIN32
 #ifndef _T
 #define _T(x) x
+#endif
 #endif
 
 inline COLORREF RGB(int r, int g, int b) {
@@ -535,8 +547,9 @@ inline void EndBatchDraw() {
 
 // ========== 输入处理 ==========
 
+#ifndef _WIN32
 /**
- * @brief GetAsyncKeyState兼容实现
+ * @brief GetAsyncKeyState兼容实现 (非Windows用SFML)
  * @details 通过SFML实时查询键盘状态
  *          最高位(0x8000)表示当前是否按下
  */
@@ -568,9 +581,11 @@ inline SHORT GetAsyncKeyState(int vKey) {
     }
     return 0;
 }
+#endif // !_WIN32
 
 // ========== 时间和Sleep ==========
 
+#ifndef _WIN32
 /**
  * @brief GetTickCount64兼容实现（返回毫秒时间戳）
  */
@@ -587,5 +602,6 @@ inline uint64_t GetTickCount64() {
 inline void Sleep(DWORD ms) {
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
+#endif // !_WIN32
 
 #endif // _WIN32

@@ -37,6 +37,24 @@ namespace sf {
         void setLooping(bool) {}
         int getStatus() const { return 0; }
     };
+    class Music {
+    public:
+        Music() = default;
+        ~Music() = default;
+        Music(const Music&) = delete;
+        Music& operator=(const Music&) = delete;
+        Music(Music&&) = default;
+        Music& operator=(Music&&) = default;
+        bool openFromFile(const std::string&) { return true; }
+        void play() {}
+        void pause() {}
+        void stop() {}
+        void setVolume(float) {}
+        void setLooping(bool) {}
+        void setPlayingOffset(int64_t) {}
+        int getStatus() const { return 0; }
+        int64_t getDuration() const { return 0; }
+    };
     class InputSoundFile {
     public:
         bool openFromFile(const std::string&) { return true; }
