@@ -17,7 +17,15 @@ jobs:
         with:
           arch: x64
 
+      - name: Cache SFML 3
+        id: cache-sfml
+        uses: actions/cache@v4
+        with:
+          path: sfml3
+          key: sfml-3.0.0-vc17-x64
+
       - name: Download SFML 3 (VC17)
+        if: steps.cache-sfml.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://www.sfml-dev.org/files/SFML-3.0.0-windows-vc17-64-bit.zip" -OutFile sfml3.zip
