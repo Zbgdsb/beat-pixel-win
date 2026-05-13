@@ -1759,6 +1759,20 @@ bool GameWindow::loadChartFromFile(const std::string& chartPath, const std::stri
         try { bpm = std::stof(val); } catch (...) {}
     }
 
+    // 解析BPM置信度
+    float confidence = 0.0f;
+    size_t confPos = json.find("\"bpmConfidence\"");
+    if (confPos != std::string::npos) {
+        size_t colon = json.find(":", confPos);
+        size_t end = json.find(",", colon);
+        if (end == std::string::npos) end = json.find("\n", colon);
+        if (end == std::string::npos) end = json.size();
+        std::string val = json.substr(colon + 1, end - colon - 1);
+        val.erase(0, val.find_first_not_of(" \t\n\r"));
+        val.erase(val.find_last_not_of(" \t\n\r") + 1);
+        try { confidence = std::stof(val); } catch (...) {}
+    }
+
     // 解析音符
     noteTimeData.clear();
     size_t notesPos = json.find("\"notes\"");
@@ -1806,6 +1820,7 @@ bool GameWindow::loadChartFromFile(const std::string& chartPath, const std::stri
     // 填充 analysisResult（供 loadSongForPlaying 使用）
     analysisResult.success = true;
     analysisResult.bpm = bpm;
+    analysisResult.bpmConfidence = confidence;
     analysisResult.chart = noteTimeData;
     analysisResult.metadata.title = title;
     analysisFilePath = mp3Path;
