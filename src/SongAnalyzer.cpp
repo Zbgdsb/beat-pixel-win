@@ -27,6 +27,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstring>
+#include <vector>
 #ifndef _WIN32
 #include <unistd.h>
 #else
