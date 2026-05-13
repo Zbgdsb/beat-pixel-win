@@ -277,6 +277,8 @@ void GameWindow::render() {
     drawAchievementPopups();
 
     FlushBatchDraw();
+    static int renderCount = 0;
+    if (++renderCount % 60 == 0) debugLog("render: 60 frames rendered");
 }
 
 // ========== 动画绘制 ==========
@@ -1247,7 +1249,8 @@ void GameWindow::drawSettingsScreen() {
 // ========== V3.2: 歌曲分析界面绘制 ==========
 void GameWindow::drawAnalysisScreen() {
     using namespace _easyx_impl;
-    if (!g_window || !g_windowOpen) return;
+    if (!g_window || !g_windowOpen) { debugLog("drawAnalysisScreen: window closed, skip"); return; }
+    debugLog("drawAnalysisScreen: start");
 
     // 渐变背景
     const int bands = 16;
@@ -1512,6 +1515,7 @@ void GameWindow::drawAnalysisScreen() {
         g_window->draw(tapBg);
         outtextxy((int)(panelX + (panelW - tapW) / 2), (int)(panelY + panelH - 65), tapStr);
     }
+    debugLog("drawAnalysisScreen: end");
 }
 
 // ========== V3.3: 成就弹窗更新 ==========
@@ -2062,6 +2066,7 @@ void GameWindow::drawTutorialScreen() {
 
 void GameWindow::run() {
     const int FRAME_TIME = 1000 / fps;
+    debugLog("run: entering main loop");
 
     while (isRunning) {
         long long frameStart = GetTickCount64();

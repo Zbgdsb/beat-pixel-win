@@ -340,6 +340,13 @@ void GameWindow::handleAnalysisInput() {
 
     if (!analysisDone) return;
 
+    // V4.0: 首次进入分析界面日志
+    static bool analysisFirstFrame = true;
+    if (analysisFirstFrame) {
+        analysisFirstFrame = false;
+        debugLog("handleAnalysisInput: first active frame");
+    }
+
     // T键
     if (tJustPressed) {
         if (!isInTapping) {
