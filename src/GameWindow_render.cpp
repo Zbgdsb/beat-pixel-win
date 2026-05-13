@@ -844,7 +844,8 @@ void GameWindow::drawUI() {
     // 操作提示
     settextcolor(RGB(100, 100, 100));
     settextstyle(12, 0, "Consolas");
-    outtextxy(20, height - 28, "ESC: 菜单  |  A S D F");
+    outtextxy(20, height - 40, "A S D F  |  J K  |  P:自动  |  F1/F2:偏移");
+    outtextxy(20, height - 22, "ESC: 菜单  |  W/S:难度切分");
 }
 
 // ========== 结算界面（V3.1新版：带准确率、评级、Full Combo/All Perfect标记） ==========
