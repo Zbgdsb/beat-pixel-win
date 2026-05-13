@@ -444,8 +444,11 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsFallback() {
 #endif
 
 #ifdef _WIN32
+    // Windows: 归一化路径分隔符
+    std::string winFilePath = currentFilePath;
+    std::replace(winFilePath.begin(), winFilePath.end(), '/', '\\');
     std::string ffp = getFfmpegPath();
-    std::string cmd = "\"" + ffp + "\" -y -i \"" + currentFilePath + "\" -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " \"" + tmpPcm + "\" >NUL 2>&1";
+    std::string cmd = "\"" + ffp + "\" -y -i \"" + winFilePath + "\" -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " \"" + tmpPcm + "\" >NUL 2>&1";
 #else
     std::string ffp = getFfmpegPath();
     std::string cmd = ffp + " -y -i '" + currentFilePath + "' -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " '" + tmpPcm + "' 2>/dev/null";
@@ -1052,8 +1055,11 @@ bool SongAnalyzer::loadAudio(const std::string& filePath) {
 #endif
 
 #ifdef _WIN32
+    // Windows: 归一化路径分隔符为反斜杠，避免cmd.exe报"文件名语法不正确"
+    std::string winFilePath = filePath;
+    std::replace(winFilePath.begin(), winFilePath.end(), '/', '\\');
     std::string ffp = getFfmpegPath();
-    std::string cmd = "\"" + ffp + "\" -y -i \"" + filePath + "\" -ar 44100 -ac 1 -f wav \"" + tmpPath + "\" 2>&1";
+    std::string cmd = "\"" + ffp + "\" -y -i \"" + winFilePath + "\" -ar 44100 -ac 1 -f wav \"" + tmpPath + "\" 2>&1";
     FILE* pipe = _popen(cmd.c_str(), "r");
     if (!pipe) {
         debugLog("SongAnalyzer::loadAudio: _popen FAILED");
