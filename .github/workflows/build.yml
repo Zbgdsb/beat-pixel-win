@@ -68,21 +68,84 @@ jobs:
           New-Item -ItemType Directory -Path pkg/BeatPixel/assets/textures -Force
           New-Item -ItemType Directory -Path pkg/BeatPixel/assets/sounds -Force
           New-Item -ItemType Directory -Path pkg/BeatPixel/songs -Force
+          
+          # 可执行文件 + 运行库
           Copy-Item BeatPixel.exe pkg/BeatPixel/
           Copy-Item sfml3/bin/*.dll pkg/BeatPixel/
+          Copy-Item ffmpeg.exe pkg/BeatPixel/
+          
+          # 源码（可修改后重新编译）
+          Copy-Item -Recurse src pkg/BeatPixel/src/
+          Copy-Item -Recurse tools pkg/BeatPixel/tools/ -ErrorAction SilentlyContinue
+          Copy-Item Makefile pkg/BeatPixel/ -ErrorAction SilentlyContinue
+          Copy-Item CMakeLists.txt pkg/BeatPixel/ -ErrorAction SilentlyContinue
+          
+          # SFML 开发包（重新编译必备：头文件+库文件）
+          New-Item -ItemType Directory -Path pkg/BeatPixel/sfml/include -Force
+          New-Item -ItemType Directory -Path pkg/BeatPixel/sfml/lib -Force
+          Copy-Item -Recurse sfml3/include/* pkg/BeatPixel/sfml/include/
+          Copy-Item sfml3/lib/*.lib pkg/BeatPixel/sfml/lib/
+          
+          # 游戏资源
           Copy-Item -Recurse assets/textures/* pkg/BeatPixel/assets/textures/
           Copy-Item -Recurse assets/sounds/* pkg/BeatPixel/assets/sounds/ -ErrorAction SilentlyContinue
           Copy-Item songs/*.mp3 pkg/BeatPixel/songs/ -ErrorAction SilentlyContinue
           Copy-Item songs/*.json pkg/BeatPixel/songs/ -ErrorAction SilentlyContinue
           Copy-Item songs/*.beatpixel pkg/BeatPixel/songs/ -ErrorAction SilentlyContinue
-          Copy-Item ffmpeg.exe pkg/BeatPixel/
+          
+          # Windows MSVC 一键编译脚本
           @"
-          BeatPixel - 节拍像素 v3.1
+          @echo off
+          chcp 65001 >nul
+          echo ========================================
+          echo   BeatPixel - 节拍像素 编译脚本
+          echo ========================================
+          echo.
+          echo 要求: Visual Studio 2022 已安装
+          echo 请从 "x64 Native Tools Command Prompt" 运行此脚本
+          echo （开始菜单搜索即可找到）
+          echo.
+          cl /MT /std:c++17 /O2 /EHsc /Isrc /Isfml/include /DBEATPIXEL_USE_SFML /FeBeatPixel.exe ^
+            src/main.cpp ^
+            src/GameWindow.cpp ^
+            src/NoteTrack.cpp ^
+            src/Note.cpp ^
+            src/ScoreSystem.cpp ^
+            src/AudioManager.cpp ^
+            src/BeatParser.cpp ^
+            src/DataManager.cpp ^
+            src/SongAnalyzer.cpp ^
+            src/ChartPackage.cpp ^
+            src/AchievementSystem.cpp ^
+            /link /LIBPATH:sfml/lib ^
+            sfml-graphics.lib sfml-window.lib sfml-system.lib sfml-audio.lib ^
+            winmm.lib opengl32.lib gdi32.lib freetype.lib user32.lib
+          if %ERRORLEVEL% EQU 0 (
+            echo.
+            echo ========================================
+            echo   编译成功！双击 BeatPixel.exe 运行
+            echo ========================================
+          ) else (
+            echo.
+            echo 编译失败，请检查上方错误信息
+          )
+          pause
+          "@ | Out-File pkg/BeatPixel/build.bat -Encoding UTF8
+          
+          @"
+          BeatPixel - 节拍像素 v3.2
           =========================
-          双击 BeatPixel.exe 即可运行
-          按键: D F J K L ; 六键
-          ESC返回 ↑↓Enter导航
-          MP3放入songs文件夹
+          【直接运行】双击 BeatPixel.exe
+          
+          【重新编译】
+          1. 开始菜单搜索 "x64 Native Tools Command Prompt"
+          2. cd 到 BeatPixel 目录
+          3. 运行 build.bat
+          4. 编译完成后双击 BeatPixel.exe
+          
+          【按键】D F J K L ; 六键
+          【导航】W/S 上下  Enter 确认  ESC 返回
+          【自定义】MP3 放入 songs 文件夹
           "@ | Out-File pkg/BeatPixel/使用说明.txt -Encoding UTF8
           
           Get-ChildItem pkg/BeatPixel/ -Recurse | ForEach-Object { $_.FullName.Replace((Get-Location).Path + '\pkg\BeatPixel\', '') }
