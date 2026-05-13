@@ -21,9 +21,9 @@ public:
     sf::Texture noteGood;      // Good判定音符 (note_good.png)
     sf::Texture noteMiss;      // Miss判定音符 (note_miss.png)
 
-    // ========== 按键纹理 (A/S/D/F) ==========
-    sf::Texture keyNormal[4];  // 按键正常状态
-    sf::Texture keyPressed[4]; // 按键按下状态
+    // ========== 按键纹理（6轨统一） ==========
+    sf::Texture keyNormal[6];  // 按键正常状态
+    sf::Texture keyPressed[6]; // 按键按下状态
 
     // ========== 判定文字纹理 ==========
     sf::Texture textPerfect;   // "PERFECT!"文字素材
@@ -49,11 +49,10 @@ public:
         ok &= load(notePerfect,  assetPath + "/note_perfect.png");
         ok &= load(noteGood,     assetPath + "/note_good.png");
         ok &= load(noteMiss,     assetPath + "/note_miss.png");
-        // 按键 A S D F
-        const char* keyNames[4] = {"A", "S", "D", "F"};
-        for (int i = 0; i < 4; i++) {
-            ok &= load(keyNormal[i],  assetPath + "/key_" + keyNames[i] + "_normal.png");
-            ok &= load(keyPressed[i], assetPath + "/key_" + keyNames[i] + "_pressed.png");
+        // 按键（6轨统一贴图）
+        for (int i = 0; i < 6; i++) {
+            ok &= load(keyNormal[i],  assetPath + "/key_normal.png");
+            ok &= load(keyPressed[i], assetPath + "/key_pressed.png");
         }
         // 判定文字
         ok &= load(textPerfect, assetPath + "/text_perfect.png");
@@ -64,7 +63,7 @@ public:
         ok &= load(judgeLine,  assetPath + "/judge_line.png");
         ok &= load(gameBg,     assetPath + "/game_bg.png");
 
-        if (ok) printf("[TextureManager] 全部 %d 张纹理加载成功\n", 19);
+        if (ok) printf("[TextureManager] 全部 %d 张纹理加载成功\n", 23);
         return ok;
     }
 
