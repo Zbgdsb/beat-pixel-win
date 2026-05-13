@@ -1907,7 +1907,11 @@ void GameWindow::startSelectedSong(SongListItem& selected) {
 
 void GameWindow::refreshSongList() {
     songList.clear();
+#ifdef _WIN32
+    std::string songsDir = exeDir + "\\songs\\";
+#else
     std::string songsDir = exeDir + "/songs/";
+#endif
 
     // 跨平台文件系统扫描
     try {
