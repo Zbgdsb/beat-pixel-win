@@ -60,20 +60,21 @@ void GameWindow::drawMenuScreen() {
     const char* menuItems[] = {
         "歌曲列表",
         "成就",
+        "游玩说明",
         "设置",
         "难度: 普通",
         "退出"
     };
     char diffStr[64];
     snprintf(diffStr, sizeof(diffStr), "难度: %s", getDifficultyName());
-    menuItems[3] = diffStr;
+    menuItems[4] = diffStr;
 
     int menuY = 170;
-    int itemH = 48;
+    int itemH = 42;
 
     float menuItemX = (float)((width - 300) / 2);
     float menuItemW = 300.0f;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
         int y = menuY + i * itemH;
         
         // 悬浮检测
@@ -202,6 +203,8 @@ void GameWindow::render() {
             drawSettingsScreen();
         } else if (showAchievements) {
             drawAchievementsScreen();
+        } else if (showTutorial) {
+            drawTutorialScreen();
         } else if (isShowingSongList) {
             drawSongListScreen();
         } else {
@@ -1906,6 +1909,121 @@ void GameWindow::drawTrackDelegateScreen() {
     outtextxy((int)(panelX + (panelW - textwidth("开始游戏")) / 2), (int)(btnY + 10), "开始游戏");
 }
 
+// ========== 游玩说明界面 ==========
+
+void GameWindow::drawTutorialScreen() {
+    using namespace _easyx_impl;
+    if (!g_window || !g_windowOpen) return;
+
+    // 背景
+    sf::RectangleShape bg({(float)width, (float)height});
+    bg.setFillColor(sf::Color(10, 10, 25));
+    g_window->draw(bg);
+
+    // 标题
+    settextcolor(RGB(0, 255, 200));
+    settextstyle(32, 0, "Consolas");
+    const char* title = "游玩说明";
+    outtextxy((width - textwidth(title)) / 2, 25, title);
+
+    // 分割线
+    sf::RectangleShape line({(float)(width - 100), 1.0f});
+    line.setPosition({50.0f, 65.0f});
+    line.setFillColor(sf::Color(0, 180, 180, 80));
+    g_window->draw(line);
+
+    int y = 80;
+    int xLeft = 60;
+    int xContent = 80;
+
+    auto drawSection = [&](const char* title, int& y) {
+        settextcolor(RGB(0, 220, 200));
+        settextstyle(18, 0, "Consolas");
+        outtextxy(xLeft, y, title);
+        y += 24;
+    };
+
+    auto drawText = [&](const char* text, int& y) {
+        settextcolor(RGB(180, 190, 210));
+        settextstyle(14, 0, "Consolas");
+        outtextxy(xContent, y, text);
+        y += 20;
+    };
+
+    auto drawKeyHint = [&](const char* label, const char* desc, int& y) {
+        settextcolor(RGB(0, 255, 200));
+        settextstyle(14, 0, "Consolas");
+        outtextxy(xContent, y, label);
+        settextcolor(RGB(150, 160, 180));
+        outtextxy(xContent + textwidth(label) + 10, y, desc);
+        y += 20;
+    };
+
+    // ===== 基本玩法 =====
+    drawSection("= 基本玩法 =", y);
+    drawText("节拍像素是一款6键下落式节奏游戏", y);
+    drawText("音符从轨道上方下落，到达判定线时按下对应按键即可得分", y);
+    y += 6;
+
+    // ===== 按键绑定 =====
+    drawSection("= 按键绑定 (从左到右) =", y);
+    y += 4;
+    drawKeyHint("轨道1:", "D", y);
+    drawKeyHint("轨道2:", "F", y);
+    drawKeyHint("轨道3:", "J", y);
+    drawKeyHint("轨道4:", "K", y);
+    drawKeyHint("轨道5:", "L", y);
+    drawKeyHint("轨道6:", "; (分号)", y);
+    y += 6;
+
+    // ===== 判定系统 =====
+    drawSection("= 判定系统 =", y);
+    drawText("Perfect:  偏差 <= 50ms  |  100分 + Combo加成", y);
+    drawText("Good:     偏差 <= 150ms |  50分 + Combo加成", y);
+    drawText("Miss:     偏差 > 150ms  |  0分，Combo归零", y);
+    y += 6;
+
+    // ===== 导航说明 =====
+    drawSection("= 导航说明 =", y);
+    drawKeyHint("W / S:", "上下选择菜单", y);
+    drawKeyHint("Enter:", "确认选择 / 开始游戏", y);
+    drawKeyHint("ESC:", "返回上级菜单 / 暂停游戏", y);
+    y += 6;
+
+    // ===== 自定义歌曲 =====
+    drawSection("= 自定义歌曲 =", y);
+    drawText("将 MP3 文件放入 songs 文件夹", y);
+    drawText("启动游戏后选择「歌曲列表」即可看到", y);
+    drawText("首次播放会自动分析节拍生成谱面", y);
+    y += 6;
+
+    // ===== 点拍模式 =====
+    drawSection("= 点拍模式 =", y);
+    drawText("没有谱面的歌曲，按 T 键进入点拍模式", y);
+    drawText("跟着音乐节奏按 T 键标记节拍（至少3次）", y);
+    drawText("系统会根据你的点拍自动生成节拍谱面", y);
+    y += 6;
+
+    // ===== 难度说明 =====
+    drawSection("= 难度说明 =", y);
+    drawText("普通: 标准谱面密度，适合新手入门", y);
+    drawText("困难: 谱面密度提升，音符更多更快", y);
+    drawText("专家: 最高密度，适合节奏达人挑战", y);
+    y += 6;
+
+    // ===== 小技巧 =====
+    drawSection("= 小技巧 =", y);
+    drawText("连续 Perfect 可积累 Combo，高分的关键！", y);
+    drawText("不要急着按键，看准判定线再出手", y);
+    drawText("从普通难度开始，熟悉后再挑战更高难度", y);
+
+    // 底部返回提示
+    settextcolor(RGB(80, 80, 100));
+    settextstyle(14, 0, "Consolas");
+    const char* hint = "按 ESC 返回主菜单";
+    outtextxy((width - textwidth(hint)) / 2, height - 35, hint);
+}
+
 // ========== 主循环 ==========
 
 void GameWindow::run() {
@@ -1929,6 +2047,8 @@ void GameWindow::run() {
                 handleSettingsInput();
             } else if (showAchievements) {
                 handleAchievementsInput();
+            } else if (showTutorial) {
+                handleTutorialInput();
             } else if (isShowingSongList) {
                 handleSongListInput();
             } else {

@@ -137,11 +137,11 @@ void GameWindow::handleMenuInput() {
 
     if (upJust) {
         menuSelection--;
-        if (menuSelection < 0) menuSelection = 6;
+        if (menuSelection < 0) menuSelection = 5;
     }
     if (downJust) {
         menuSelection++;
-        if (menuSelection > 4) menuSelection = 0;
+        if (menuSelection > 5) menuSelection = 0;
     }
     if (enterJust) {
         switch (menuSelection) {
@@ -156,18 +156,22 @@ void GameWindow::handleMenuInput() {
                 showAchievements = true;
                 break;
 
-            case 2: // 进入设置界面
+            case 2: // 游玩说明
+                showTutorial = true;
+                break;
+
+            case 3: // 进入设置界面
                 isInSettings = true;
                 settingsMenuSelection = 0;
                 settingsJustOpened = true;
                 break;
 
-            case 3: // 难度选择 - 循环切换
+            case 4: // 难度选择 - 循环切换
                 difficultySelection = (difficultySelection + 1) % 3;
                 currentDifficulty = (Difficulty)difficultySelection;
                 break;
 
-            case 4: // 退出
+            case 5: // 退出
                 isRunning = false;
                 break;
         }
@@ -182,7 +186,7 @@ void GameWindow::handleMenuInput() {
         int menuY = 170;
         int itemH = 48;
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 6; i++) {
             float itemY = (float)(menuY + i * itemH);
             if (isPointInRect(mx, my, menuX, itemY - 5.0f, 300.0f, 40.0f)) {
                 menuSelection = i;
@@ -198,15 +202,18 @@ void GameWindow::handleMenuInput() {
                         showAchievements = true;
                         break;
                     case 2:
+                        showTutorial = true;
+                        break;
+                    case 3:
                         isInSettings = true;
                         settingsMenuSelection = 0;
                         settingsJustOpened = true;
                         break;
-                    case 3:
+                    case 4:
                         difficultySelection = (difficultySelection + 1) % 3;
                         currentDifficulty = (Difficulty)difficultySelection;
                         break;
-                    case 4:
+                    case 5:
                         isRunning = false;
                         break;
                 }
@@ -1903,6 +1910,25 @@ void GameWindow::refreshSongList() {
 
     printf("[GameWindow] 歌曲列表: %zu首\n", songList.size());
     fflush(stdout);
+}
+
+// ========== 游玩说明输入处理 ==========
+
+void GameWindow::handleTutorialInput() {
+    if (!processWindowEvents()) {
+        isRunning = false;
+        return;
+    }
+
+    bool escPressed = (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
+    static bool prevEsc = false;
+    bool escJust = escPressed && !prevEsc;
+    prevEsc = escPressed;
+
+    if (escJust) {
+        showTutorial = false;
+        menuJustOpened = true;  // 防止 ESC 直接穿透到菜单
+    }
 }
 
 void GameWindow::handleSongListInput() {

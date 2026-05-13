@@ -123,6 +123,7 @@ private:
     bool importRequested = false;   // 是否请求导入MP3
     bool chartExportRequested = false; // V3.3: 导出谱面
     bool showAchievements = false;  // V3.3: 显示成就界面
+    bool showTutorial = false;      // V3.4: 显示游玩说明界面
 
     // ========== V3.4: 歌曲列表 ==========
     struct SongListItem {
@@ -246,6 +247,8 @@ private:
     void drawSongListScreen();     // V3.4: 歌曲列表界面
     void drawTrackDelegateScreen();// 代管轨道选择界面
     void handleSongListInput();    // V3.4: 歌曲列表输入
+    void drawTutorialScreen();     // 游玩说明界面
+    void handleTutorialInput();    // 游玩说明输入
     void drawAchievementPopups(); // V3.3: 成就弹窗绘制
     void updateAchievementPopups(float dt);
     std::string getFileNameWithoutExt(const std::string& filePath);
