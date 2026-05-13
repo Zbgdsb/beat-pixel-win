@@ -1933,89 +1933,104 @@ void GameWindow::drawTutorialScreen() {
     g_window->draw(line);
 
     int y = 80;
-    int xLeft = 60;
-    int xContent = 80;
+    int xLeft = 50;
+    int xContent = 65;
+    int xCol2 = 470;  // 右列起始
+    int lineH = 17;
 
-    auto drawSection = [&](const char* title, int& y) {
+    auto drawSection = [&](int x, const char* title, int& y) {
         settextcolor(RGB(0, 220, 200));
-        settextstyle(18, 0, "Consolas");
-        outtextxy(xLeft, y, title);
-        y += 24;
+        settextstyle(16, 0, "Consolas");
+        outtextxy(x, y, title);
+        y += 22;
     };
 
-    auto drawText = [&](const char* text, int& y) {
-        settextcolor(RGB(180, 190, 210));
-        settextstyle(14, 0, "Consolas");
-        outtextxy(xContent, y, text);
-        y += 20;
+    auto drawText = [&](int x, const char* text, int& y) {
+        settextcolor(RGB(170, 180, 200));
+        settextstyle(13, 0, "Consolas");
+        outtextxy(x, y, text);
+        y += lineH;
     };
 
-    auto drawKeyHint = [&](const char* label, const char* desc, int& y) {
+    auto drawKey = [&](int x, const char* label, const char* desc, int& y) {
         settextcolor(RGB(0, 255, 200));
-        settextstyle(14, 0, "Consolas");
-        outtextxy(xContent, y, label);
-        settextcolor(RGB(150, 160, 180));
-        outtextxy(xContent + textwidth(label) + 10, y, desc);
-        y += 20;
+        settextstyle(13, 0, "Consolas");
+        outtextxy(x, y, label);
+        settextcolor(RGB(140, 150, 170));
+        outtextxy(x + textwidth(label) + 6, y, desc);
+        y += lineH;
     };
 
-    // ===== 基本玩法 =====
-    drawSection("= 基本玩法 =", y);
-    drawText("节拍像素是一款6键下落式节奏游戏", y);
-    drawText("音符从轨道上方下落，到达判定线时按下对应按键即可得分", y);
-    y += 6;
+    // ========== 左列 ==========
+    int ly = y;
 
-    // ===== 按键绑定 =====
-    drawSection("= 按键绑定 (从左到右) =", y);
-    y += 4;
-    drawKeyHint("轨道1:", "D", y);
-    drawKeyHint("轨道2:", "F", y);
-    drawKeyHint("轨道3:", "J", y);
-    drawKeyHint("轨道4:", "K", y);
-    drawKeyHint("轨道5:", "L", y);
-    drawKeyHint("轨道6:", "; (分号)", y);
-    y += 6;
+    drawSection(xLeft, "= 基本玩法 =", ly);
+    drawText(xContent, "6键下落式节奏游戏", ly);
+    drawText(xContent, "音符下落 → 到达判定线 → 按键得分", ly);
+    drawText(xContent, "A/S/D/F/J/K 六键对应六条轨道", ly);
+    ly += 6;
 
-    // ===== 判定系统 =====
-    drawSection("= 判定系统 =", y);
-    drawText("Perfect:  偏差 <= 50ms  |  100分 + Combo加成", y);
-    drawText("Good:     偏差 <= 150ms |  50分 + Combo加成", y);
-    drawText("Miss:     偏差 > 150ms  |  0分，Combo归零", y);
-    y += 6;
+    drawSection(xLeft, "= 按键绑定 =", ly);
+    drawKey(xContent, "1 底鼓:", "A", ly);
+    drawKey(xContent, "2 踩镲:", "S", ly);
+    drawKey(xContent, "3 吊镲:", "D", ly);
+    drawKey(xContent, "4 军鼓:", "F", ly);
+    drawKey(xContent, "5 通鼓:", "J", ly);
+    drawKey(xContent, "6 叮镲:", "K", ly);
+    drawText(xContent, "(可在设置中自定义)", ly);
+    ly += 6;
 
-    // ===== 导航说明 =====
-    drawSection("= 导航说明 =", y);
-    drawKeyHint("W / S:", "上下选择菜单", y);
-    drawKeyHint("Enter:", "确认选择 / 开始游戏", y);
-    drawKeyHint("ESC:", "返回上级菜单 / 暂停游戏", y);
-    y += 6;
+    drawSection(xLeft, "= 判定系统 =", ly);
+    drawText(xContent, "Perfect  <=50ms   100分+连击", ly);
+    drawText(xContent, "Good     <=150ms  50分+连击", ly);
+    drawText(xContent, "Miss     >150ms   0分+断连", ly);
+    ly += 6;
 
-    // ===== 自定义歌曲 =====
-    drawSection("= 自定义歌曲 =", y);
-    drawText("将 MP3 文件放入 songs 文件夹", y);
-    drawText("启动游戏后选择「歌曲列表」即可看到", y);
-    drawText("首次播放会自动分析节拍生成谱面", y);
-    y += 6;
+    drawSection(xLeft, "= 导航说明 =", ly);
+    drawKey(xContent, "W/S:", "上下选择", ly);
+    drawKey(xContent, "Enter:", "确认/开始", ly);
+    drawKey(xContent, "ESC:", "返回/暂停", ly);
+    drawKey(xContent, "F1/F2:", "微调偏移 -/+10ms", ly);
+    ly += 6;
 
-    // ===== 点拍模式 =====
-    drawSection("= 点拍模式 =", y);
-    drawText("没有谱面的歌曲，按 T 键进入点拍模式", y);
-    drawText("跟着音乐节奏按 T 键标记节拍（至少3次）", y);
-    drawText("系统会根据你的点拍自动生成节拍谱面", y);
-    y += 6;
+    // ========== 右列 ==========
+    int ry = y;
 
-    // ===== 难度说明 =====
-    drawSection("= 难度说明 =", y);
-    drawText("普通: 标准谱面密度，适合新手入门", y);
-    drawText("困难: 谱面密度提升，音符更多更快", y);
-    drawText("专家: 最高密度，适合节奏达人挑战", y);
-    y += 6;
+    drawSection(xCol2, "= 自定义歌曲 =", ry);
+    drawText(xCol2 + 15, "MP3 放入 songs 文件夹", ry);
+    drawText(xCol2 + 15, "在「歌曲列表」中选择播放", ry);
+    drawText(xCol2 + 15, "首次播放自动分析生成谱面", ry);
+    ry += 6;
 
-    // ===== 小技巧 =====
-    drawSection("= 小技巧 =", y);
-    drawText("连续 Perfect 可积累 Combo，高分的关键！", y);
-    drawText("不要急着按键，看准判定线再出手", y);
-    drawText("从普通难度开始，熟悉后再挑战更高难度", y);
+    drawSection(xCol2, "= 点拍模式 =", ry);
+    drawText(xCol2 + 15, "无谱面歌曲按 T 进入点拍", ry);
+    drawText(xCol2 + 15, "跟着节奏按 T 标记节拍", ry);
+    drawText(xCol2 + 15, "系统自动生成节拍谱面", ry);
+    ry += 6;
+
+    drawSection(xCol2, "= 代管轨道 =", ry);
+    drawText(xCol2 + 15, "选歌后进入代管轨道界面", ry);
+    drawText(xCol2 + 15, "空格切换轨道自动/手动", ry);
+    drawText(xCol2 + 15, "不想玩的轨道设为自动代打", ry);
+    drawText(xCol2 + 15, "回车确认后开始游戏", ry);
+    ry += 6;
+
+    drawSection(xCol2, "= P键自动演示 =", ry);
+    drawText(xCol2 + 15, "游戏中按 P 切换自动模式", ry);
+    drawText(xCol2 + 15, "自动模式仅演奏代管轨道", ry);
+    drawText(xCol2 + 15, "手动轨道仍需自己按键", ry);
+    ry += 6;
+
+    drawSection(xCol2, "= 难度说明 =", ry);
+    drawText(xCol2 + 15, "普通: 标准密度 新手入门", ry);
+    drawText(xCol2 + 15, "困难: 密度提升 音符更多", ry);
+    drawText(xCol2 + 15, "专家: 最高密度 节奏挑战", ry);
+    ry += 6;
+
+    drawSection(xCol2, "= 小技巧 =", ry);
+    drawText(xCol2 + 15, "连击越高分数越多！", ry);
+    drawText(xCol2 + 15, "看准判定线再出手", ry);
+    drawText(xCol2 + 15, "从普通难度开始练", ry);
 
     // 底部返回提示
     settextcolor(RGB(80, 80, 100));
