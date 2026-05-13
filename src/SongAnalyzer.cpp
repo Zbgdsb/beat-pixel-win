@@ -62,7 +62,11 @@ static std::string getExeDir() {
 
 // 获取ffmpeg路径：优先用exe同目录下的ffmpeg.exe，没有则回退到系统PATH
 static std::string getFfmpegPath() {
+#ifdef _WIN32
+    std::string bundled = getExeDir() + "\\ffmpeg.exe";
+#else
     std::string bundled = getExeDir() + "/ffmpeg.exe";
+#endif
     FILE* fp = fopen(bundled.c_str(), "rb");
     if (fp) { fclose(fp); return bundled; }
     return "ffmpeg";  // fallback: 系统PATH
@@ -279,10 +283,17 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsWithAccent() {
 
 std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsViaPython() {
     // 查找Python脚本路径
+#ifdef _WIN32
+    std::string scriptPath = getExeDir() + "\\tools\\beat_detect.py";
+    FILE* f = fopen(scriptPath.c_str(), "r");
+    if (!f) {
+        scriptPath = getExeDir() + "\\..\\tools\\beat_detect.py";
+#else
     std::string scriptPath = getExeDir() + "/tools/beat_detect.py";
     FILE* f = fopen(scriptPath.c_str(), "r");
     if (!f) {
         scriptPath = getExeDir() + "/../tools/beat_detect.py";
+#endif
         f = fopen(scriptPath.c_str(), "r");
     }
     if (!f) return {};
