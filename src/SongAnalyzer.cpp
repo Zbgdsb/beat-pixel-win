@@ -27,7 +27,6 @@
 #include <fstream>
 #include <sstream>
 #include <cstring>
-#include <vector>
 #ifndef _WIN32
 #include <unistd.h>
 #else
@@ -445,45 +444,15 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsFallback() {
 #endif
 
 #ifdef _WIN32
-    // Windows: 归一化路径，CreateProcess直接调ffmpeg（绕开cmd.exe）
+    // Windows: 归一化路径，外层引号包裹绕过cmd.exe对"开头的解析
     std::string winFilePath = currentFilePath;
     std::replace(winFilePath.begin(), winFilePath.end(), '/', '\\');
     std::string ffp = getFfmpegPath();
     std::replace(ffp.begin(), ffp.end(), '/', '\\');
     
-    std::string args = "\"" + ffp + "\" -y -i \"" + winFilePath + "\" -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " \"" + tmpPcm + "\" 2>&1";
-    
-    HANDLE hRead, hWrite;
-    SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE };
-    if (!CreatePipe(&hRead, &hWrite, &sa, 0)) { remove(tmpPcm); return {}; }
-    SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0);
-    
-    STARTUPINFOA si = { sizeof(si) };
-    si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdOutput = hWrite;
-    si.hStdError = hWrite;
-    
-    PROCESS_INFORMATION pi = {};
-    std::vector<char> cmdBuf(args.begin(), args.end());
-    cmdBuf.push_back('\0');
-    
-    if (!CreateProcessA(NULL, cmdBuf.data(), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
-        CloseHandle(hWrite); CloseHandle(hRead); remove(tmpPcm); return {};
-    }
-    CloseHandle(hWrite);
-    
-    // 吞掉输出
-    char dbuf[256]; DWORD n;
-    while (ReadFile(hRead, dbuf, sizeof(dbuf), &n, NULL) && n > 0) {}
-    CloseHandle(hRead);
-    
-    WaitForSingleObject(pi.hProcess, INFINITE);
-    DWORD exitCode;
-    GetExitCodeProcess(pi.hProcess, &exitCode);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-    
-    if (exitCode != 0) {
+    std::string cmd = "\"\"\"" + ffp + "\" -y -i \"" + winFilePath + "\" -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " \"" + tmpPcm + "\" 2>&1\"";
+    int ret = system(cmd.c_str());
+    if (ret != 0) {
         debugLog("SongAnalyzer::detectBeatsFallback: ffmpeg FAILED");
         remove(tmpPcm);
         return {};
@@ -1094,61 +1063,25 @@ bool SongAnalyzer::loadAudio(const std::string& filePath) {
 #endif
 
 #ifdef _WIN32
-    // Windows: 归一化路径分隔符，然后用CreateProcess直接调ffmpeg（绕开cmd.exe引号解析）
+    // Windows: 归一化路径，然后整条cmd用外层引号包裹（cmd.exe对以"开头的命令需特殊处理）
     std::string winFilePath = filePath;
     std::replace(winFilePath.begin(), winFilePath.end(), '/', '\\');
     std::string ffp = getFfmpegPath();
     std::replace(ffp.begin(), ffp.end(), '/', '\\');
     
-    // 构建参数字符串（CreateProcess的lpCommandLine参数）
-    std::string args = "\"" + ffp + "\" -y -i \"" + winFilePath + "\" -ar 44100 -ac 1 -f wav \"" + tmpPath + "\" 2>&1";
-    
-    // 创建匿名管道捕获输出
-    HANDLE hRead, hWrite;
-    SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE };
-    if (!CreatePipe(&hRead, &hWrite, &sa, 0)) {
-        debugLog("SongAnalyzer::loadAudio: CreatePipe FAILED");
+    // 外层引号: ""..." → cmd.exe去外层引号后得到 "ffmpeg.exe" -y ...
+    std::string cmd = "\"\"\"" + ffp + "\" -y -i \"" + winFilePath + "\" -ar 44100 -ac 1 -f wav \"" + tmpPath + "\" 2>&1\"";
+    FILE* pipe = _popen(cmd.c_str(), "r");
+    if (!pipe) {
+        debugLog("SongAnalyzer::loadAudio: _popen FAILED");
         remove(tmpPath); return false;
     }
-    SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0);
-    
-    STARTUPINFOA si = { sizeof(si) };
-    si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdOutput = hWrite;
-    si.hStdError = hWrite;
-    
-    PROCESS_INFORMATION pi = {};
-    std::vector<char> cmdBuf(args.begin(), args.end());
-    cmdBuf.push_back('\0');
-    
-    BOOL ok = CreateProcessA(NULL, cmdBuf.data(), NULL, NULL, TRUE,
-                              CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
-    CloseHandle(hWrite);
-    
-    if (!ok) {
-        DWORD err = GetLastError();
-        debugLog(("SongAnalyzer::loadAudio: CreateProcess FAILED err=" + std::to_string(err)).c_str());
-        CloseHandle(hRead); remove(tmpPath); return false;
-    }
-    
-    // 读取输出
-    std::string ffmpegOut;
     char buf[2048];
-    DWORD read;
-    while (ReadFile(hRead, buf, sizeof(buf) - 1, &read, NULL) && read > 0) {
-        buf[read] = '\0';
-        ffmpegOut += buf;
-    }
-    CloseHandle(hRead);
-    
-    WaitForSingleObject(pi.hProcess, INFINITE);
-    DWORD exitCode;
-    GetExitCodeProcess(pi.hProcess, &exitCode);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-    
-    if (exitCode != 0) {
-        std::string logMsg = "SongAnalyzer::loadAudio: ffmpeg FAILED code=" + std::to_string(exitCode);
+    std::string ffmpegOut;
+    while (fgets(buf, sizeof(buf), pipe)) ffmpegOut += buf;
+    int ret = _pclose(pipe);
+    if (ret != 0) {
+        std::string logMsg = "SongAnalyzer::loadAudio: ffmpeg FAILED code=" + std::to_string(ret);
         debugLog(logMsg.c_str());
         debugLog(("SongAnalyzer::loadAudio: tmpPath=" + std::string(tmpPath)).c_str());
         debugLog(("SongAnalyzer::loadAudio: filePath=" + filePath).c_str());
