@@ -288,7 +288,11 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsViaPython() {
     if (!f) return {};
     fclose(f);
 
+#ifdef _WIN32
+    std::string cmd = "python \"" + scriptPath + "\" \"" + currentFilePath + "\" 2>NUL";
+#else
     std::string cmd = "python3 '" + scriptPath + "' '" + currentFilePath + "' 2>/dev/null";
+#endif
     FILE* pipe = popen(cmd.c_str(), "r");
     if (!pipe) return {};
 
@@ -430,13 +434,14 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsFallback() {
 
 #ifdef _WIN32
     std::string ffp = getFfmpegPath();
-    std::string cmd = ffp + " -y -i \"" + currentFilePath + "\" -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " \"" + tmpPcm + "\" >NUL 2>&1";
+    std::string cmd = "\"" + ffp + "\" -y -i \"" + currentFilePath + "\" -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " \"" + tmpPcm + "\" >NUL 2>&1";
 #else
     std::string ffp = getFfmpegPath();
     std::string cmd = ffp + " -y -i '" + currentFilePath + "' -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " '" + tmpPcm + "' 2>/dev/null";
 #endif
     int ret = system(cmd.c_str());
     if (ret != 0) {
+        debugLog("SongAnalyzer::detectBeatsFallback: ffmpeg FAILED");
         remove(tmpPcm);
         return {};
     }
@@ -1037,17 +1042,20 @@ bool SongAnalyzer::loadAudio(const std::string& filePath) {
 
 #ifdef _WIN32
     std::string ffp = getFfmpegPath();
-    std::string cmd = ffp + " -y -i \"" + filePath + "\" -ar 44100 -ac 1 -f wav \"" + tmpPath + "\" >NUL 2>&1";
+    std::string cmd = "\"" + ffp + "\" -y -i \"" + filePath + "\" -ar 44100 -ac 1 -f wav \"" + tmpPath + "\" >NUL 2>&1";
 #else
     std::string ffp = getFfmpegPath();
     std::string cmd = ffp + " -y -i '" + filePath + "' -ar 44100 -ac 1 -f wav '" + tmpPath + "' 2>/dev/null";
 #endif
     int ret = system(cmd.c_str());
     if (ret != 0) {
-        fprintf(stderr, "[SongAnalyzer] ffmpeg转换失败\n");
+        std::string logMsg = "SongAnalyzer::loadAudio: ffmpeg FAILED code=" + std::to_string(ret);
+        debugLog(logMsg.c_str());
         remove(tmpPath);
         return false;
     }
+
+    debugLog("SongAnalyzer::loadAudio: ffmpeg OK");
 
     // 加载转换后的WAV
     bool ok = false;

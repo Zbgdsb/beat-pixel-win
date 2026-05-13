@@ -1901,6 +1901,7 @@ void GameWindow::startSelectedSong(SongListItem& selected) {
         printf("[GameWindow] 或放入预置谱面: %s\n", (selected.filePath + ".chart.json").c_str());
         fflush(stdout);
         isShowingSongList = true;
+        debugLog("startSelectedSong: analysis FAILED, back to song list");
     }
 }
 
