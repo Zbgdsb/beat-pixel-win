@@ -1042,7 +1042,7 @@ bool SongAnalyzer::loadAudio(const std::string& filePath) {
 
 #ifdef _WIN32
     std::string ffp = getFfmpegPath();
-    std::string cmd = "\"" + ffp + "\" -y -i \"" + filePath + "\" -ar 44100 -ac 1 -f wav \"" + tmpPath + "\" >NUL 2>&1";
+    std::string cmd = "\"" + ffp + "\" -y -i \"" + filePath + "\" -ar 44100 -ac 1 -f wav \"" + tmpPath + "\" 2>\"" + tmpPath + ".err\"";
 #else
     std::string ffp = getFfmpegPath();
     std::string cmd = ffp + " -y -i '" + filePath + "' -ar 44100 -ac 1 -f wav '" + tmpPath + "' 2>/dev/null";
@@ -1051,6 +1051,21 @@ bool SongAnalyzer::loadAudio(const std::string& filePath) {
     if (ret != 0) {
         std::string logMsg = "SongAnalyzer::loadAudio: ffmpeg FAILED code=" + std::to_string(ret);
         debugLog(logMsg.c_str());
+        debugLog(("SongAnalyzer::loadAudio: tmpPath=" + std::string(tmpPath)).c_str());
+        debugLog(("SongAnalyzer::loadAudio: filePath=" + filePath).c_str());
+        debugLog(("SongAnalyzer::loadAudio: ffp=" + ffp).c_str());
+        // 读取 ffmpeg stderr
+#ifdef _WIN32
+        std::string errFile = std::string(tmpPath) + ".err";
+        FILE* ef = fopen(errFile.c_str(), "r");
+        if (ef) {
+            char ebuf[1024];
+            if (fgets(ebuf, sizeof(ebuf), ef)) {
+                debugLog(("SongAnalyzer::loadAudio: ffmpeg stderr=" + std::string(ebuf)).c_str());
+            }
+            fclose(ef);
+        }
+#endif
         remove(tmpPath);
         return false;
     }
