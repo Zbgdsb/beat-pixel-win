@@ -1042,33 +1042,44 @@ bool SongAnalyzer::loadAudio(const std::string& filePath) {
 
 #ifdef _WIN32
     std::string ffp = getFfmpegPath();
-    std::string cmd = "\"" + ffp + "\" -y -i \"" + filePath + "\" -ar 44100 -ac 1 -f wav \"" + tmpPath + "\" 2>\"" + tmpPath + ".err\"";
-#else
-    std::string ffp = getFfmpegPath();
-    std::string cmd = ffp + " -y -i '" + filePath + "' -ar 44100 -ac 1 -f wav '" + tmpPath + "' 2>/dev/null";
-#endif
-    int ret = system(cmd.c_str());
+    std::string cmd = "\"" + ffp + "\" -y -i \"" + filePath + "\" -ar 44100 -ac 1 -f wav \"" + tmpPath + "\" 2>&1";
+    FILE* pipe = _popen(cmd.c_str(), "r");
+    if (!pipe) {
+        debugLog("SongAnalyzer::loadAudio: _popen FAILED");
+        remove(tmpPath);
+        return false;
+    }
+    char buf[2048];
+    std::string ffmpegOut;
+    while (fgets(buf, sizeof(buf), pipe)) {
+        ffmpegOut += buf;
+    }
+    int ret = _pclose(pipe);
     if (ret != 0) {
         std::string logMsg = "SongAnalyzer::loadAudio: ffmpeg FAILED code=" + std::to_string(ret);
         debugLog(logMsg.c_str());
         debugLog(("SongAnalyzer::loadAudio: tmpPath=" + std::string(tmpPath)).c_str());
         debugLog(("SongAnalyzer::loadAudio: filePath=" + filePath).c_str());
         debugLog(("SongAnalyzer::loadAudio: ffp=" + ffp).c_str());
-        // 读取 ffmpeg stderr
-#ifdef _WIN32
-        std::string errFile = std::string(tmpPath) + ".err";
-        FILE* ef = fopen(errFile.c_str(), "r");
-        if (ef) {
-            char ebuf[1024];
-            if (fgets(ebuf, sizeof(ebuf), ef)) {
-                debugLog(("SongAnalyzer::loadAudio: ffmpeg stderr=" + std::string(ebuf)).c_str());
-            }
-            fclose(ef);
+        if (!ffmpegOut.empty()) {
+            debugLog(("SongAnalyzer::loadAudio: ffmpeg out=" + ffmpegOut.substr(0, 500)).c_str());
+        } else {
+            debugLog("SongAnalyzer::loadAudio: ffmpeg produced no output");
         }
-#endif
         remove(tmpPath);
         return false;
     }
+#else
+    std::string ffp = getFfmpegPath();
+    std::string cmd = ffp + " -y -i '" + filePath + "' -ar 44100 -ac 1 -f wav '" + tmpPath + "' 2>/dev/null";
+    int ret = system(cmd.c_str());
+    if (ret != 0) {
+        std::string logMsg = "SongAnalyzer::loadAudio: ffmpeg FAILED code=" + std::to_string(ret);
+        debugLog(logMsg.c_str());
+        remove(tmpPath);
+        return false;
+    }
+#endif
 
     debugLog("SongAnalyzer::loadAudio: ffmpeg OK");
 
