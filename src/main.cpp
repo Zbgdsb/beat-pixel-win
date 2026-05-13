@@ -24,20 +24,47 @@
  * @date 2026
  */
 #include "GameWindow.h"
+#include "DebugLog.h"
 #include <cstdio>
 
+#ifdef _WIN32
+#include <windows.h>
+
+// V4.0: 未处理异常捕获 - 写入 crash.log 辅助诊断闪退
+static LONG WINAPI UnhandledExceptionFilter(EXCEPTION_POINTERS* info) {
+    FILE* f = fopen("crash.log", "w");
+    if (f) {
+        fprintf(f, "Exception code: 0x%08X\n", (unsigned)info->ExceptionRecord->ExceptionCode);
+        fprintf(f, "Fault address: 0x%p\n", info->ExceptionRecord->ExceptionAddress);
+        fclose(f);
+    }
+    MessageBoxA(NULL, "BeatPixel 发生错误，详情已写入 crash.log", "错误", MB_ICONERROR);
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+#endif
+
 int main() {
+#ifdef _WIN32
+    // 安装崩溃捕获
+    SetUnhandledExceptionFilter(UnhandledExceptionFilter);
+    debugLog("main: start");
+#endif
+
     // 创建游戏窗口实例：800x650分辨率，60FPS
     GameWindow game(900, 650, 60);
 
     // 初始化游戏（创建窗口、加载谱面）
+    debugLog("main: calling init");
     if (!game.init()) {
         printf("游戏初始化失败！\n");
+        debugLog("main: init failed");
         return -1;
     }
+    debugLog("main: init ok");
 
     // 运行游戏主循环（阻塞直到游戏结束）
     game.run();
 
+    debugLog("main: exit");
     return 0;
 }

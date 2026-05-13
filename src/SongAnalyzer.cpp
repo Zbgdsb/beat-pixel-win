@@ -4,6 +4,7 @@
  * @details 自相关BPM检测(精度±0.5)、重音标记、ID3读取、JSON导出
  */
 #include "SongAnalyzer.h"
+#include "DebugLog.h"
 #ifdef _WIN32
 #ifndef BEATPIXEL_USE_SFML
 #include "graphics.h"
@@ -97,6 +98,7 @@ SongAnalyzer::AnalysisResult SongAnalyzer::analyze(const std::string& filePath) 
     // 2. 加载音频
     printf("[SongAnalyzer] 加载音频...\n");
     fflush(stdout);
+    debugLog("SongAnalyzer: before loadAudio");
     if (!loadAudio(filePath)) {
         result.errorMessage = "无法读取音频文件";
         return result;
@@ -415,9 +417,10 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsFallback() {
     const int SR = 22050;
 #ifdef _WIN32
     char tmpPcm[MAX_PATH];
-    GetTempPathA(MAX_PATH, tmpPcm);
-    strcat(tmpPcm, "beatpixel_pcm_XXXXXX.pcm");
+    if (GetTempPathA(MAX_PATH, tmpPcm) == 0) { strcpy(tmpPcm, ".\\"); }
+    strcat(tmpPcm, "beatpixel_pcm_XXXXXX");
     _mktemp_s(tmpPcm, strlen(tmpPcm) + 1);
+    strcat(tmpPcm, ".pcm");   // _mktemp_s 要求 XXXXXX 在末尾
 #else
     char tmpPcm[] = "/tmp/beatpixel_pcm_XXXXXX.pcm";
     int tmpFd = mkstemps(tmpPcm, 4);
@@ -1014,12 +1017,14 @@ bool SongAnalyzer::loadAudio(const std::string& filePath) {
     // MP3 或 SFML不支持该格式，用ffmpeg转换
     printf("[SongAnalyzer] SFML不支持该格式，使用ffmpeg转换...\n");
     fflush(stdout);
+    debugLog("SongAnalyzer::loadAudio: calling ffmpeg");
 
 #ifdef _WIN32
     char tmpPath[MAX_PATH];
-    GetTempPathA(MAX_PATH, tmpPath);
-    strcat(tmpPath, "beatpixel_convert_XXXXXX.wav");
+    if (GetTempPathA(MAX_PATH, tmpPath) == 0) { strcpy(tmpPath, ".\\"); }
+    strcat(tmpPath, "beatpixel_convert_XXXXXX");
     _mktemp_s(tmpPath, strlen(tmpPath) + 1);
+    strcat(tmpPath, ".wav");  // _mktemp_s 要求 XXXXXX 在末尾
 #else
     char tmpPath[] = "/tmp/beatpixel_convert_XXXXXX.wav";
     int tmpFd = mkstemps(tmpPath, 4);

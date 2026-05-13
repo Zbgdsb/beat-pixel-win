@@ -1874,8 +1874,10 @@ void GameWindow::startSelectedSong(SongListItem& selected) {
     // V4.0: loading提示已在上一帧由 drawSongListScreen 渲染（songLoading=true 触发）
     analysisFilePath = selected.filePath;
     currentSongName = selected.name;
+    debugLog("startSelectedSong: before SongAnalyzer");
     SongAnalyzer analyzer;
     analysisResult = analyzer.analyze(selected.filePath);
+    debugLog("startSelectedSong: after SongAnalyzer");
 
     if (analysisResult.success) {
         manualBPM = analysisResult.bpm;

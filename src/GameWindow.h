@@ -14,6 +14,7 @@
  *          - 动画系统（打击效果、判定文字、Combo跳动）
  */
 #pragma once
+#include "DebugLog.h"
 #include "graphics.h"
 #include <vector>
 #include <utility>
