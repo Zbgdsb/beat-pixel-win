@@ -286,6 +286,7 @@ void GameWindow::handleAnalysisInput() {
         if (g_window && g_windowOpen) {
             while (const auto event = g_window->pollEvent()) {
                 if (event->is<sf::Event::Closed>()) {
+                    debugLog("handleAnalysisInput: window closed event, setting isRunning=false");
                     g_windowOpen = false;
                     isRunning = false;
                     return;
@@ -378,6 +379,7 @@ void GameWindow::handleAnalysisInput() {
             printf("[点拍模式] 已退出\n");
             fflush(stdout);
         } else {
+            debugLog("handleAnalysisInput: ESC pressed, returning to MENU");
             gameState = MENU;
             return;
         }

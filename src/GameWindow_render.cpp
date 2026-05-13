@@ -2070,6 +2070,13 @@ void GameWindow::run() {
 
     while (isRunning) {
         long long frameStart = GetTickCount64();
+        static int frameNum = 0;
+        static int lastLoggedState = -1;
+        frameNum++;
+        if (lastLoggedState != (int)gameState) {
+            lastLoggedState = (int)gameState;
+            debugLog((std::string("run: gameState=") + std::to_string((int)gameState) + " frame=" + std::to_string(frameNum)).c_str());
+        }
 
         // 更新鼠标坐标
         {
@@ -2118,4 +2125,5 @@ void GameWindow::run() {
 
     audioManager.stopBGM();
     closegraph();
+    debugLog("run: main loop ended (isRunning=false)");
 }
