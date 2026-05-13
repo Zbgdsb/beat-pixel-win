@@ -31,7 +31,7 @@
 #include <windows.h>
 
 // V4.0: 未处理异常捕获 - 写入 crash.log 辅助诊断闪退
-static LONG WINAPI UnhandledExceptionFilter(EXCEPTION_POINTERS* info) {
+static LONG WINAPI BeatPixelCrashHandler(EXCEPTION_POINTERS* info) {
     FILE* f = fopen("crash.log", "w");
     if (f) {
         fprintf(f, "Exception code: 0x%08X\n", (unsigned)info->ExceptionRecord->ExceptionCode);
@@ -46,7 +46,7 @@ static LONG WINAPI UnhandledExceptionFilter(EXCEPTION_POINTERS* info) {
 int main() {
 #ifdef _WIN32
     // 安装崩溃捕获
-    SetUnhandledExceptionFilter(UnhandledExceptionFilter);
+    SetUnhandledExceptionFilter(BeatPixelCrashHandler);
     debugLog("main: start");
 #endif
 
