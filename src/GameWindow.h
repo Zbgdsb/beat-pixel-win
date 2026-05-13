@@ -134,6 +134,7 @@ private:
     std::vector<SongListItem> songList;
     int songListSelection = 0;     // 列表选中索引
     bool isShowingSongList = false; // 是否在歌曲列表界面
+    bool songLoading = false;       // V4.0: 歌曲加载中（避免卡死错觉）
     bool songListJustOpened = false; // 防止Enter粘滞触发Demo
     bool settingsJustOpened = false;  // 防止Enter粘滞
     bool analysisJustOpened = false;  // 防止Enter粘滞（分析界面）

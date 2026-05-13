@@ -1851,7 +1851,7 @@ void GameWindow::startSelectedSong(SongListItem& selected) {
         return;
     }
 
-    // 有预置谱面 → 加载谱面，进入分析确认界面（ANALYZING → DELEGATE → PLAYING）
+    // 有预置谱面 → 快速加载（通常<100ms，不需要loading提示）
     if (selected.hasChart) {
         std::string chartPath = selected.filePath + ".chart.json";
         if (loadChartFromFile(chartPath, selected.filePath)) {
@@ -1870,11 +1870,22 @@ void GameWindow::startSelectedSong(SongListItem& selected) {
         return;
     }
 
-    // 无预置谱面 → 尝试分析MP3（需要ffmpeg在PATH中）
+    // 无预置谱面 → 需要分析MP3（ffmpeg转换+onset检测+BPM分析，可能耗时5-20秒）
+    // V4.0: 先渲染一帧loading提示，避免用户以为卡死
+    songLoading = true;
+    {
+        using namespace _easyx_impl;
+        g_window->clear(sf::Color(0, 0, 0));
+        drawSongListScreen();
+        g_window->display();
+    }
+
     analysisFilePath = selected.filePath;
     currentSongName = selected.name;
     SongAnalyzer analyzer;
     analysisResult = analyzer.analyze(selected.filePath);
+
+    songLoading = false;
     if (analysisResult.success) {
         manualBPM = analysisResult.bpm;
         manualOffset = 0;

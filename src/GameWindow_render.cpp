@@ -826,13 +826,13 @@ void GameWindow::drawUI() {
     }
 
     // --- 底部：判定统计面板 ---
-    sf::RectangleShape statPanel({280.0f, 48.0f});
-    statPanel.setPosition({10.0f, (float)(height - 58)});
+    sf::RectangleShape statPanel({290.0f, 54.0f});
+    statPanel.setPosition({10.0f, (float)(height - 60)});
     statPanel.setFillColor(sf::Color(0, 0, 0, 100));
     g_window->draw(statPanel);
 
-    settextstyle(14, 0, "Consolas");
-    settextcolor(RGB(180, 180, 180));
+    settextstyle(12, 0, "Consolas");
+    settextcolor(RGB(165, 165, 165));
     char statStr[128];
     snprintf(statStr, sizeof(statStr), "P:%d  G:%d  M:%d  MaxCombo:%d",
              scoreSystem.getPerfectCount(),
@@ -842,10 +842,8 @@ void GameWindow::drawUI() {
     outtextxy(20, height - 52, statStr);
 
     // 操作提示
-    settextcolor(RGB(100, 100, 100));
-    settextstyle(12, 0, "Consolas");
-    outtextxy(20, height - 40, "A S D F  |  J K  |  P:自动  |  F1/F2:偏移");
-    outtextxy(20, height - 22, "ESC: 菜单  |  W/S:难度切分");
+    settextcolor(RGB(110, 110, 110));
+    outtextxy(20, height - 28, "A S D F J K  |  P:自动  |  F1/F2:偏移  |  ESC:菜单");
 }
 
 // ========== 结算界面（V3.1新版：带准确率、评级、Full Combo/All Perfect标记） ==========
@@ -1800,6 +1798,26 @@ void GameWindow::drawSongListScreen() {
     settextcolor(RGB(100, 100, 120));
     settextstyle(12, 0, "Consolas");
     outtextxy((int)(panelX + (panelW - textwidth("ESC: 返回  |  回车: 播放")) / 2), (int)(panelY + panelH - 18), "ESC: 返回  |  回车: 播放");
+
+    // V4.0: 歌曲加载中提示（强制渲染一帧避免卡死错觉）
+    if (songLoading) {
+        sf::RectangleShape loadMask({panelW, panelH});
+        loadMask.setPosition({panelX, panelY});
+        loadMask.setFillColor(sf::Color(0, 0, 0, 130));
+        g_window->draw(loadMask);
+
+        settextcolor(RGB(0, 255, 200));
+        settextstyle(18, 0, "Consolas");
+        const char* loadText = "正在分析音频...";
+        int lw = textwidth(loadText);
+        outtextxy((int)(panelX + (panelW - lw) / 2), (int)(panelY + panelH / 2 - 20), loadText);
+
+        settextcolor(RGB(140, 140, 160));
+        settextstyle(12, 0, "Consolas");
+        const char* subText = "首次分析可能需要数秒，请稍候";
+        int sw = textwidth(subText);
+        outtextxy((int)(panelX + (panelW - sw) / 2), (int)(panelY + panelH / 2 + 8), subText);
+    }
 }
 
 // ========== 代管轨道选择界面 ==========
