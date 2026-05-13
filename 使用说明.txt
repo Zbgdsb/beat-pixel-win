@@ -1,0 +1,13 @@
+BeatPixel - 节拍像素 v3.2
+=========================
+【直接运行】双击 BeatPixel.exe
+
+【重新编译】
+1. 开始菜单搜索 "x64 Native Tools Command Prompt"
+2. cd 到 BeatPixel 目录
+3. 运行 build.bat
+4. 编译完成后双击 BeatPixel.exe
+
+【按键】D F J K L ; 六键
+【导航】W/S 上下  Enter 确认  ESC 返回
+【自定义】MP3 放入 songs 文件夹

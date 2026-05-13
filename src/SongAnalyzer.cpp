@@ -13,6 +13,7 @@
 #include <io.h>
 #include <windows.h>
 #endif
+#include <process.h>
 #else
 #include <SFML/Audio.hpp>
 #include <mach-o/dyld.h>
@@ -71,6 +72,48 @@ static std::string getFfmpegPath() {
     if (fp) { fclose(fp); return bundled; }
     return "ffmpeg";  // fallback: 系统PATH
 }
+
+#ifdef _WIN32
+static std::string quoteSpawnArg(const std::string& arg) {
+    if (arg.find_first_of(" \t\"") == std::string::npos) {
+        return arg;
+    }
+
+    std::string quoted = "\"";
+    int backslashes = 0;
+    for (char ch : arg) {
+        if (ch == '\\') {
+            backslashes++;
+        } else if (ch == '"') {
+            quoted.append(backslashes * 2 + 1, '\\');
+            quoted.push_back(ch);
+            backslashes = 0;
+        } else {
+            quoted.append(backslashes, '\\');
+            backslashes = 0;
+            quoted.push_back(ch);
+        }
+    }
+    quoted.append(backslashes * 2, '\\');
+    quoted.push_back('"');
+    return quoted;
+}
+
+static int runFfmpegDirect(const std::string& ffmpegPath, const std::vector<std::string>& args) {
+    std::vector<const char*> argv;
+    argv.reserve(args.size() + 2);
+    argv.push_back(ffmpegPath.c_str());
+    for (const auto& arg : args) {
+        argv.push_back(arg.c_str());
+    }
+    argv.push_back(nullptr);
+
+    if (ffmpegPath == "ffmpeg") {
+        return _spawnvp(_P_WAIT, ffmpegPath.c_str(), argv.data());
+    }
+    return _spawnv(_P_WAIT, ffmpegPath.c_str(), argv.data());
+}
+#endif
 
 // ========== 常量 ==========
 static const size_t WINDOW_SIZE = 1024;
@@ -444,29 +487,26 @@ std::vector<SongAnalyzer::BeatInfo> SongAnalyzer::detectBeatsFallback() {
 #endif
 
 #ifdef _WIN32
-    // Windows: 归一化路径，外层引号包裹绕过cmd.exe对"开头的解析
-    std::string winFilePath = currentFilePath;
-    std::replace(winFilePath.begin(), winFilePath.end(), '/', '\\');
     std::string ffp = getFfmpegPath();
-    std::replace(ffp.begin(), ffp.end(), '/', '\\');
-    
-    std::string cmd = "\"\"\"" + ffp + "\" -y -i \"" + winFilePath + "\" -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " \"" + tmpPcm + "\" 2>&1\"";
-    int ret = system(cmd.c_str());
-    if (ret != 0) {
-        debugLog("SongAnalyzer::detectBeatsFallback: ffmpeg FAILED");
-        remove(tmpPcm);
-        return {};
-    }
+    int ret = runFfmpegDirect(ffp, {
+        "-y",
+        "-i", quoteSpawnArg(currentFilePath),
+        "-f", "s16le",
+        "-acodec", "pcm_s16le",
+        "-ac", "1",
+        "-ar", std::to_string(SR),
+        quoteSpawnArg(tmpPcm)
+    });
 #else
     std::string ffp = getFfmpegPath();
     std::string cmd = ffp + " -y -i '" + currentFilePath + "' -f s16le -acodec pcm_s16le -ac 1 -ar " + std::to_string(SR) + " '" + tmpPcm + "' 2>/dev/null";
     int ret = system(cmd.c_str());
+#endif
     if (ret != 0) {
         debugLog("SongAnalyzer::detectBeatsFallback: ffmpeg FAILED");
         remove(tmpPcm);
         return {};
     }
-#endif
 
     // Step 2: 读取PCM样本
     FILE* fp = fopen(tmpPcm, "rb");
@@ -965,6 +1005,32 @@ SongAnalyzer::SongMetadata SongAnalyzer::readID3Tags(const std::string& filePath
 
 // ========== JSON导出 ==========
 
+static std::string escapeJsonString(const std::string& value) {
+    std::string escaped;
+    escaped.reserve(value.size() + 8);
+    for (unsigned char ch : value) {
+        switch (ch) {
+            case '\"': escaped += "\\\""; break;
+            case '\\': escaped += "\\\\"; break;
+            case '\b': escaped += "\\b"; break;
+            case '\f': escaped += "\\f"; break;
+            case '\n': escaped += "\\n"; break;
+            case '\r': escaped += "\\r"; break;
+            case '\t': escaped += "\\t"; break;
+            default:
+                if (ch < 0x20) {
+                    char buf[7];
+                    snprintf(buf, sizeof(buf), "\\u%04X", ch);
+                    escaped += buf;
+                } else {
+                    escaped += static_cast<char>(ch);
+                }
+                break;
+        }
+    }
+    return escaped;
+}
+
 bool SongAnalyzer::exportChart(const std::string& filePath, const AnalysisResult& result) {
     FILE* fp = fopen(filePath.c_str(), "w");
     if (!fp) {
@@ -972,11 +1038,15 @@ bool SongAnalyzer::exportChart(const std::string& filePath, const AnalysisResult
         return false;
     }
 
+    std::string title = escapeJsonString(result.metadata.title);
+    std::string artist = escapeJsonString(result.metadata.artist);
+    std::string album = escapeJsonString(result.metadata.album);
+
     fprintf(fp, "{\n");
     fprintf(fp, "  \"metadata\": {\n");
-    fprintf(fp, "    \"title\": \"%s\",\n", result.metadata.title.c_str());
-    fprintf(fp, "    \"artist\": \"%s\",\n", result.metadata.artist.c_str());
-    fprintf(fp, "    \"album\": \"%s\",\n", result.metadata.album.c_str());
+    fprintf(fp, "    \"title\": \"%s\",\n", title.c_str());
+    fprintf(fp, "    \"artist\": \"%s\",\n", artist.c_str());
+    fprintf(fp, "    \"album\": \"%s\",\n", album.c_str());
     fprintf(fp, "    \"duration\": %.2f\n", result.metadata.duration);
     fprintf(fp, "  },\n");
     fprintf(fp, "  \"bpm\": %.1f,\n", result.bpm);
@@ -1063,34 +1133,21 @@ bool SongAnalyzer::loadAudio(const std::string& filePath) {
 #endif
 
 #ifdef _WIN32
-    // Windows: 归一化路径，然后整条cmd用外层引号包裹（cmd.exe对以"开头的命令需特殊处理）
-    std::string winFilePath = filePath;
-    std::replace(winFilePath.begin(), winFilePath.end(), '/', '\\');
     std::string ffp = getFfmpegPath();
-    std::replace(ffp.begin(), ffp.end(), '/', '\\');
-    
-    // 外层引号: ""..." → cmd.exe去外层引号后得到 "ffmpeg.exe" -y ...
-    std::string cmd = "\"\"\"" + ffp + "\" -y -i \"" + winFilePath + "\" -ar 44100 -ac 1 -f wav \"" + tmpPath + "\" 2>&1\"";
-    FILE* pipe = _popen(cmd.c_str(), "r");
-    if (!pipe) {
-        debugLog("SongAnalyzer::loadAudio: _popen FAILED");
-        remove(tmpPath); return false;
-    }
-    char buf[2048];
-    std::string ffmpegOut;
-    while (fgets(buf, sizeof(buf), pipe)) ffmpegOut += buf;
-    int ret = _pclose(pipe);
+    int ret = runFfmpegDirect(ffp, {
+        "-y",
+        "-i", quoteSpawnArg(filePath),
+        "-ar", "44100",
+        "-ac", "1",
+        "-f", "wav",
+        quoteSpawnArg(tmpPath)
+    });
     if (ret != 0) {
         std::string logMsg = "SongAnalyzer::loadAudio: ffmpeg FAILED code=" + std::to_string(ret);
         debugLog(logMsg.c_str());
         debugLog(("SongAnalyzer::loadAudio: tmpPath=" + std::string(tmpPath)).c_str());
         debugLog(("SongAnalyzer::loadAudio: filePath=" + filePath).c_str());
         debugLog(("SongAnalyzer::loadAudio: ffp=" + ffp).c_str());
-        if (!ffmpegOut.empty()) {
-            debugLog(("SongAnalyzer::loadAudio: ffmpeg out=" + ffmpegOut.substr(0, 500)).c_str());
-        } else {
-            debugLog("SongAnalyzer::loadAudio: ffmpeg produced no output");
-        }
         remove(tmpPath);
         return false;
     }

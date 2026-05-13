@@ -9,52 +9,188 @@
 #include <algorithm>
 #include <cmath>
 
+namespace {
+float clampFloat(float v, float lo, float hi) {
+    return std::max(lo, std::min(hi, v));
+}
+
+uint8_t alphaByte(float value) {
+    return (uint8_t)clampFloat(value, 0.0f, 255.0f);
+}
+
+float fractFloat(float v) {
+    return v - std::floor(v);
+}
+
+float hash01(int n) {
+    float x = std::sin((float)n * 12.9898f + 78.233f) * 43758.5453f;
+    return fractFloat(x);
+}
+
+void drawAdditiveGlowRect(sf::RenderWindow* window, float x, float y, float w, float h,
+                          sf::Color color, int layers = 3) {
+    if (!window) return;
+    for (int i = layers; i >= 1; --i) {
+        float pad = (float)i * 5.0f;
+        sf::RectangleShape glow({w + pad * 2.0f, h + pad * 2.0f});
+        glow.setPosition({x - pad, y - pad});
+        glow.setFillColor(sf::Color(color.r, color.g, color.b, (uint8_t)(color.a / (i * 4 + 4))));
+        window->draw(glow, sf::BlendAdd);
+    }
+}
+
+void drawNeonBackground(sf::RenderWindow* window, int width, int height, float timeSec,
+                        float intensity, bool menuMode, int combo) {
+    if (!window || width <= 0 || height <= 0) return;
+
+    intensity = clampFloat(intensity, 0.0f, 1.0f);
+    float comboBoost = clampFloat(combo / 120.0f, 0.0f, 1.0f);
+    float pulse = 0.5f + 0.5f * std::sin(timeSec * (menuMode ? 1.2f : 1.8f));
+
+    int baseR = (int)(5 + 8 * pulse + 18 * comboBoost);
+    int baseG = (int)(10 + 7 * pulse + 5 * comboBoost);
+    int baseB = (int)(28 + 18 * intensity - 8 * comboBoost);
+    int topR = baseR + 4;
+    int topG = baseG + 8;
+    int topB = baseB + 26;
+    int botR = baseR + (int)(10 * comboBoost);
+    int botG = baseG - 4;
+    int botB = std::max(14, baseB - 12);
+
+    const int bands = 28;
+    for (int i = 0; i < bands; i++) {
+        float t = (float)i / (float)bands;
+        int r = (int)(topR + (botR - topR) * t);
+        int g = (int)(topG + (botG - topG) * t);
+        int b = (int)(topB + (botB - topB) * t);
+        int y1 = (int)(height * t);
+        int y2 = (int)(height * (t + 1.0f / bands));
+        sf::RectangleShape band({(float)width, (float)(y2 - y1 + 1)});
+        band.setPosition({0.0f, (float)y1});
+        band.setFillColor(sf::Color(r, g, b, menuMode ? 255 : 185));
+        window->draw(band);
+    }
+
+    float horizon = height * (menuMode ? 0.60f : 0.58f);
+    float gridAlpha = (menuMode ? 38.0f : 26.0f) + 36.0f * intensity + 24.0f * comboBoost;
+    float gridShift = std::fmod(timeSec * (menuMode ? 34.0f : 48.0f), 52.0f);
+
+    for (int i = 0; i < 18; i++) {
+        float t = (float)i / 17.0f;
+        float y = horizon + std::pow(t, 2.15f) * (height - horizon + 90.0f) + gridShift * (0.25f + t);
+        if (y > height) continue;
+        sf::RectangleShape line({(float)width, 1.0f});
+        line.setPosition({0.0f, y});
+        line.setFillColor(sf::Color(0, 220, 255, alphaByte(gridAlpha * (1.0f - t * 0.55f))));
+        window->draw(line, sf::BlendAdd);
+    }
+
+    for (int i = -7; i <= 7; i++) {
+        float centerX = width * 0.5f;
+        float footX = centerX + i * (width * 0.095f);
+        sf::VertexArray ray(sf::PrimitiveType::Lines, 2);
+        ray[0].position = {centerX + i * 12.0f, horizon};
+        ray[1].position = {footX, (float)height};
+        sf::Color c(0, 220, 255, alphaByte(gridAlpha * 0.75f));
+        ray[0].color = sf::Color(c.r, c.g, c.b, (uint8_t)(c.a * 0.25f));
+        ray[1].color = c;
+        window->draw(ray, sf::BlendAdd);
+    }
+
+    int particleCount = menuMode ? 46 : 30;
+    float drift = timeSec * (menuMode ? 0.035f : 0.055f) * (1.0f + comboBoost * 0.7f);
+    for (int i = 0; i < particleCount; i++) {
+        float px = hash01(i * 37 + 11) * width;
+        float py = fractFloat(hash01(i * 53 + 19) + drift * (0.35f + hash01(i * 71))) * height;
+        float radius = menuMode ? (1.2f + hash01(i * 91) * 2.4f) : (0.9f + hash01(i * 91) * 1.8f);
+        float twinkle = 0.45f + 0.55f * std::sin(timeSec * (1.3f + hash01(i) * 1.4f) + i);
+        sf::CircleShape dot(radius);
+        dot.setOrigin({radius, radius});
+        dot.setPosition({px, py});
+        dot.setFillColor(sf::Color(80, 240, 255, alphaByte((55.0f + 95.0f * twinkle) * intensity)));
+        window->draw(dot, sf::BlendAdd);
+    }
+
+    float scanY = std::fmod(timeSec * (menuMode ? 58.0f : 72.0f), (float)height + 120.0f) - 60.0f;
+    sf::RectangleShape scan({(float)width, menuMode ? 42.0f : 30.0f});
+    scan.setPosition({0.0f, scanY});
+    scan.setFillColor(sf::Color(0, 220, 255, alphaByte(menuMode ? 22.0f : 12.0f)));
+    window->draw(scan, sf::BlendAdd);
+
+    if (comboBoost > 0.01f && !menuMode) {
+        float edgeAlpha = 18.0f + 46.0f * comboBoost;
+        sf::RectangleShape leftGlow({48.0f, (float)height});
+        leftGlow.setPosition({0.0f, 0.0f});
+        leftGlow.setFillColor(sf::Color(0, 210, 255, alphaByte(edgeAlpha)));
+        window->draw(leftGlow, sf::BlendAdd);
+        sf::RectangleShape rightGlow({48.0f, (float)height});
+        rightGlow.setPosition({(float)width - 48.0f, 0.0f});
+        rightGlow.setFillColor(sf::Color(120, 80, 255, alphaByte(edgeAlpha * 0.8f)));
+        window->draw(rightGlow, sf::BlendAdd);
+    }
+
+    if (!menuMode) {
+        sf::RectangleShape trackMask({(float)width, (float)height});
+        trackMask.setPosition({0.0f, 0.0f});
+        trackMask.setFillColor(sf::Color(0, 0, 0, 72));
+        window->draw(trackMask);
+    }
+
+    sf::RectangleShape topShade({(float)width, (float)height * 0.18f});
+    topShade.setPosition({0.0f, 0.0f});
+    topShade.setFillColor(sf::Color(0, 0, 0, menuMode ? 42 : 32));
+    window->draw(topShade);
+}
+} // namespace
+
 // ========== 主菜单渲染（V2.0新增） ==========
 
 void GameWindow::drawMenuScreen() {
     using namespace _easyx_impl;
     if (!g_window || !g_windowOpen) return;
 
-    // 渐变背景（从深蓝到深紫）
-    const int bands = 16;
-    for (int i = 0; i < bands; i++) {
-        float t = (float)i / bands;
-        int r = (int)(8 + 12 * t);
-        int g = (int)(8 + 4 * t);
-        int b = (int)(20 + 15 * t);
-        int y1 = (int)(height * t);
-        int y2 = (int)(height * (t + 1.0f / bands));
-        sf::RectangleShape band({(float)width, (float)(y2 - y1)});
-        band.setPosition({0.0f, (float)y1});
-        band.setFillColor(sf::Color(r, g, b));
-        g_window->draw(band);
-    }
+    float timeSec = (float)GetTickCount64() / 1000.0f;
+    drawNeonBackground(g_window, width, height, timeSec, 0.82f, true, 0);
 
     // 标题呼吸灯效果
-    float breathe = 0.7f + 0.3f * std::sin((float)GetTickCount64() / 800.0f);
+    float breathe = 0.72f + 0.28f * std::sin(timeSec * 1.25f);
+    float titleFloat = std::sin(timeSec * 1.05f) * 4.0f;
     int titleR = (int)(0 * 255 * breathe);
     int titleG = (int)(1.0f * 255 * breathe);
     int titleB = (int)(1.0f * 255 * breathe);
 
-    settextcolor(RGB(titleR, titleG, titleB));
-    settextstyle(48, 0, "Consolas");
     const char* title = "节拍像素";
+    settextstyle(48, 0, "Consolas");
     int titleW = textwidth(title);
-    outtextxy((width - titleW) / 2, 60, title);
+    int titleX = (width - titleW) / 2;
+    int titleY = (int)(58 + titleFloat);
+
+    settextcolor(RGB(0, 70, 90));
+    outtextxy(titleX - 3, titleY + 3, title);
+    settextcolor(RGB(0, 120, 150));
+    outtextxy(titleX + 3, titleY + 2, title);
+    settextcolor(RGB(titleR, titleG, titleB));
+    outtextxy(titleX, titleY, title);
 
     // 标题下方装饰线
     int lineW = titleW + 40;
+    float lineX = (float)((width - lineW) / 2);
+    float lineY = 116.0f + titleFloat;
     sf::RectangleShape decorLine({(float)lineW, 2.0f});
-    decorLine.setPosition({(float)((width - lineW) / 2), 115.0f});
-    decorLine.setFillColor(sf::Color(0, 200, 200, (uint8_t)(120 * breathe)));
+    decorLine.setPosition({lineX, lineY});
+    decorLine.setFillColor(sf::Color(0, 220, 255, (uint8_t)(130 * breathe)));
     g_window->draw(decorLine);
+    sf::RectangleShape sweep({70.0f, 3.0f});
+    sweep.setPosition({lineX + std::fmod(timeSec * 95.0f, (float)(lineW + 70)) - 70.0f, lineY - 0.5f});
+    sweep.setFillColor(sf::Color(190, 255, 255, 150));
+    g_window->draw(sweep, sf::BlendAdd);
 
     // 副标题
-    settextcolor(RGB(140, 140, 170));
+    settextcolor(RGB(150, 190, 205));
     settextstyle(16, 0, "Consolas");
     const char* subtitle = "6键节奏游戏";
     int subW = textwidth(subtitle);
-    outtextxy((width - subW) / 2, 125, subtitle);
+    outtextxy((width - subW) / 2, 128 + (int)titleFloat, subtitle);
 
     // 菜单选项
     const char* menuItems[] = {
@@ -81,33 +217,44 @@ void GameWindow::drawMenuScreen() {
         bool hovered = (mouseX >= menuItemX && mouseX <= menuItemX + menuItemW &&
                         mouseY >= y - 5 && mouseY <= y + 35);
 
+        bool selected = (i == menuSelection);
+        float animPhase = std::fmod(timeSec * 1.35f + i * 0.18f, 1.0f);
         if (hovered) {
             // 悬浮高亮 + 自动选中
             menuSelection = i;
+            selected = true;
+        }
+
+        if (selected || hovered) {
+            float alpha = hovered ? 1.0f : 0.62f;
+            drawAdditiveGlowRect(g_window, menuItemX, (float)(y - 5), menuItemW, 40.0f,
+                                sf::Color(0, 220, 255, (uint8_t)(90 * alpha)), hovered ? 3 : 2);
+
             sf::RectangleShape highlight({menuItemW, 40.0f});
             highlight.setPosition({menuItemX, (float)(y - 5)});
-            highlight.setFillColor(sf::Color(0, 180, 180, 40));
-            highlight.setOutlineColor(sf::Color(0, 220, 220, 120));
+            highlight.setFillColor(sf::Color(6, 34, 48, (uint8_t)(168 * alpha)));
+            highlight.setOutlineColor(sf::Color(0, 230, 255, (uint8_t)(160 * alpha)));
             highlight.setOutlineThickness(1.0f);
             g_window->draw(highlight);
+
+            sf::RectangleShape scan({menuItemW * 0.28f, 38.0f});
+            scan.setPosition({menuItemX + animPhase * (menuItemW + 80.0f) - 80.0f, (float)(y - 4)});
+            scan.setFillColor(sf::Color(180, 255, 255, hovered ? 46 : 24));
+            g_window->draw(scan, sf::BlendAdd);
 
             settextcolor(RGB(0, 255, 255));
             settextstyle(22, 0, "Consolas");
             outtextxy((int)(menuItemX + 10), y + 2, ">");
 
             settextcolor(RGB(255, 255, 255));
-        } else if (i == menuSelection) {
-            // 选中项（键盘选中，鼠标不在上面）
-            sf::RectangleShape highlight({menuItemW, 40.0f});
-            highlight.setPosition({menuItemX, (float)(y - 5)});
-            highlight.setFillColor(sf::Color(0, 120, 120, 25));
-            highlight.setOutlineColor(sf::Color(0, 160, 160, 80));
-            highlight.setOutlineThickness(1.0f);
-            g_window->draw(highlight);
-
-            settextcolor(RGB(255, 255, 255));
         } else {
-            settextcolor(RGB(100, 100, 130));
+            sf::RectangleShape idleRow({menuItemW, 40.0f});
+            idleRow.setPosition({menuItemX, (float)(y - 5)});
+            idleRow.setFillColor(sf::Color(5, 18, 30, 95));
+            idleRow.setOutlineColor(sf::Color(0, 130, 160, 38));
+            idleRow.setOutlineThickness(1.0f);
+            g_window->draw(idleRow);
+            settextcolor(RGB(120, 150, 170));
         }
 
         settextstyle(22, 0, "Consolas");
@@ -127,7 +274,7 @@ void GameWindow::drawMenuScreen() {
     }
 
     // 底部提示
-    settextcolor(RGB(70, 70, 90));
+    settextcolor(RGB(85, 105, 125));
     settextstyle(13, 0, "Consolas");
     const char* hint1 = "W/S: 选择  |  回车: 确认";
     const char* hint2 = "MP3文件放入 songs/ 文件夹";
@@ -146,50 +293,8 @@ void GameWindow::drawDynamicBackground() {
     if (!g_window || !g_windowOpen) return;
 
     int combo = scoreSystem.getCurrentCombo();
-
-    // 背景色随Combo变化：深蓝 → 紫 → 红
-    int baseR = 12, baseG = 12, baseB = 28;
-    if (combo >= 100) {
-        // 炽热红
-        baseR = 40 + (combo / 10 % 10);  // 微弱脉冲
-        baseG = 8;
-        baseB = 20;
-    } else if (combo >= 50) {
-        // 紫色
-        float t = (combo - 50) / 50.0f;
-        baseR = (int)(20 + 20 * t);
-        baseG = 10;
-        baseB = (int)(35 - 15 * t);
-    } else if (combo >= 10) {
-        // 深蓝偏紫
-        float t = (combo - 10) / 40.0f;
-        baseR = (int)(12 + 8 * t);
-        baseG = 12;
-        baseB = (int)(28 + 7 * t);
-    }
-
-    // 从上到下渐变
-    int topR = baseR + 5, topG = baseG + 3, topB = baseB + 10;
-    int botR = baseR - 5, botG = baseG - 3, botB = baseB - 5;
-    if (botR < 0) botR = 0;
-    if (botG < 0) botG = 0;
-    if (botB < 0) botB = 0;
-
-    // 绘制渐变背景（分16条带）
-    const int bands = 16;
-    for (int i = 0; i < bands; i++) {
-        float t = (float)i / bands;
-        int r = (int)(topR + (botR - topR) * t);
-        int g = (int)(topG + (botG - topG) * t);
-        int b = (int)(topB + (botB - topB) * t);
-        int y1 = (int)(height * t);
-        int y2 = (int)(height * (t + 1.0f / bands));
-
-        sf::RectangleShape band({(float)width, (float)(y2 - y1)});
-        band.setPosition({0.0f, (float)y1});
-        band.setFillColor(sf::Color(r, g, b, 180)); // 半透明，露出背景图
-        g_window->draw(band);
-    }
+    float timeSec = (float)GetTickCount64() / 1000.0f;
+    drawNeonBackground(g_window, width, height, timeSec, 0.68f, false, combo);
 }
 
 // ========== 渲染调度 ==========
@@ -248,6 +353,7 @@ void GameWindow::render() {
         drawProgressBar();      // V3.0: 歌曲进度条
     } else if (gameState == PAUSED) {
         // 先绘制游戏界面作为背景
+        cleardevice();
         drawDynamicBackground();
         for (int i = 0; i < TRACK_COUNT; i++) {
             int pressGlow = (int)(keyFeedback[i].glowTimer / KeyFeedback::GLOW_DURATION * 255);
@@ -658,15 +764,18 @@ void GameWindow::drawPauseScreen() {
 
     for (int i = 0; i < 3; i++) {
         float currentY = buttonY + i * (buttonH + 20.0f);
+        bool hovered = (mouseX >= buttonX && mouseX <= buttonX + buttonW &&
+                        mouseY >= currentY && mouseY <= currentY + buttonH);
+        if (hovered) pauseMenuSelection = i;
         // 按钮背景
         sf::RectangleShape button({buttonW, buttonH});
         button.setPosition({buttonX, currentY});
-        if (i == pauseMenuSelection) {
+        if (i == pauseMenuSelection || hovered) {
             button.setFillColor(sf::Color(80, 80, 100, 255));
             if (i == 0) button.setOutlineColor(sf::Color(100, 255, 100, 255));
             else if (i == 1) button.setOutlineColor(sf::Color(255, 200, 0, 255));
             else button.setOutlineColor(sf::Color(255, 100, 100, 255));
-            button.setOutlineThickness(2.0f);
+            button.setOutlineThickness(hovered ? 3.0f : 2.0f);
         } else {
             button.setFillColor(sf::Color(50, 50, 70, 255));
             button.setOutlineColor(sf::Color(100, 100, 120, 100));
@@ -1082,10 +1191,13 @@ void GameWindow::drawSettingsScreen() {
     using namespace _easyx_impl;
     if (!g_window || !g_windowOpen) return;
 
+    float timeSec = (float)GetTickCount64() / 1000.0f;
+    drawNeonBackground(g_window, width, height, timeSec, 0.56f, true, 0);
+
     // 半透明黑色遮罩
     sf::RectangleShape mask({(float)width, (float)height});
     mask.setPosition({0, 0});
-    mask.setFillColor(sf::Color(0, 0, 0, 220));
+    mask.setFillColor(sf::Color(0, 0, 0, 135));
     g_window->draw(mask);
 
     // 主面板
@@ -1143,9 +1255,9 @@ void GameWindow::drawSettingsScreen() {
     float barHeight = 15.0f;
 
     // 检出鼠标位置用于悬停高亮
-    sf::Vector2i mousePos = sf::Mouse::getPosition(*g_window);
-    float mx = (float)mousePos.x;
-    float my = (float)mousePos.y;
+    sf::Vector2f mousePos = _easyx_impl::getLogicalMousePosition();
+    float mx = mousePos.x;
+    float my = mousePos.y;
     bool mouseOverPanel = (mx >= panelX && mx <= panelX + panelW && my >= panelY && my <= panelY + panelH);
     int hoveredItem = -1;
 
@@ -1418,8 +1530,8 @@ void GameWindow::drawAnalysisScreen() {
     g_window->draw(tlBg);
 
     // 轨道分割线
-    for (int i = 1; i < 4; i++) {
-        float lx = tlX + (tlW / 4.0f) * i;
+    for (int i = 1; i < TRACK_COUNT; i++) {
+        float lx = tlX + (tlW / (float)TRACK_COUNT) * i;
         sf::RectangleShape divider({1.0f, tlH});
         divider.setPosition({lx, tlY});
         divider.setFillColor(sf::Color(255, 255, 255, 20));
@@ -1430,14 +1542,16 @@ void GameWindow::drawAnalysisScreen() {
     if (!analysisResult.chart.empty()) {
         long long maxTime = analysisResult.chart.back().first;
         if (maxTime > 0) {
-            sf::Color trackColors[4] = {
+            sf::Color trackColors[6] = {
                 sf::Color(0, 200, 200), sf::Color(200, 80, 80),
-                sf::Color(80, 200, 80), sf::Color(200, 200, 80)
+                sf::Color(80, 200, 80), sf::Color(200, 200, 80),
+                sf::Color(255, 150, 50), sf::Color(200, 100, 255)
             };
             for (const auto& [t, trk] : analysisResult.chart) {
+                if (trk < 0 || trk >= TRACK_COUNT) continue;
                 float ratio = (float)t / maxTime;
                 float dotX = tlX + tlW * ratio;
-                float dotY = tlY + (trk + 0.5f) * (tlH / 4.0f);
+                float dotY = tlY + (trk + 0.5f) * (tlH / (float)TRACK_COUNT);
                 float dotR = 3.0f;
                 sf::CircleShape dot(dotR);
                 dot.setOrigin({dotR, dotR});
@@ -1504,7 +1618,7 @@ void GameWindow::drawAnalysisScreen() {
         settextcolor(RGB(255, 100, 100));
         settextstyle(16, 0, "Consolas");
         char tapStr[64];
-        snprintf(tapStr, sizeof(tapStr), "[点拍模式] 按 T 键跟着节奏点（至少3次）", songAnalyzer.getTapCount()); // [点拍模式] 按 T 键跟着节奏点（至少3次）
+        snprintf(tapStr, sizeof(tapStr), "[点拍模式] 已点 %d 次，至少3次", songAnalyzer.getTapCount());
         int tapW = textwidth(tapStr);
         // 高亮底板
         sf::RectangleShape tapBg({(float)(tapW + 20), 28.0f});
@@ -1579,10 +1693,13 @@ void GameWindow::drawAchievementsScreen() {
     using namespace _easyx_impl;
     if (!g_window || !g_windowOpen) return;
 
-    // 背景
+    float timeSec = (float)GetTickCount64() / 1000.0f;
+    drawNeonBackground(g_window, width, height, timeSec, 0.54f, true, 0);
+
+    // 背景压暗
     sf::RectangleShape mask({(float)width, (float)height});
     mask.setPosition({0, 0});
-    mask.setFillColor(sf::Color(0, 0, 0, 220));
+    mask.setFillColor(sf::Color(0, 0, 0, 135));
     g_window->draw(mask);
 
     float panelW = 600.0f, panelH = 620.0f;
@@ -1699,10 +1816,13 @@ void GameWindow::drawSongListScreen() {
     using namespace _easyx_impl;
     if (!g_window || !g_windowOpen) return;
 
-    // 背景
+    float timeSec = (float)GetTickCount64() / 1000.0f;
+    drawNeonBackground(g_window, width, height, timeSec, 0.60f, true, 0);
+
+    // 背景压暗，保证列表文字清晰
     sf::RectangleShape mask({(float)width, (float)height});
     mask.setPosition({0, 0});
-    mask.setFillColor(sf::Color(0, 0, 0, 220));
+    mask.setFillColor(sf::Color(0, 0, 0, 120));
     g_window->draw(mask);
 
     float panelW = 500.0f, panelH = 400.0f;
@@ -1938,10 +2058,11 @@ void GameWindow::drawTutorialScreen() {
     using namespace _easyx_impl;
     if (!g_window || !g_windowOpen) return;
 
-    // 背景
-    sf::RectangleShape bg({(float)width, (float)height});
-    bg.setFillColor(sf::Color(10, 10, 25));
-    g_window->draw(bg);
+    float timeSec = (float)GetTickCount64() / 1000.0f;
+    drawNeonBackground(g_window, width, height, timeSec, 0.50f, true, 0);
+    sf::RectangleShape bgMask({(float)width, (float)height});
+    bgMask.setFillColor(sf::Color(0, 0, 0, 125));
+    g_window->draw(bgMask);
 
     // 标题
     settextcolor(RGB(0, 255, 200));
@@ -2082,9 +2203,10 @@ void GameWindow::run() {
         {
             using namespace _easyx_impl;
             if (g_window && g_windowOpen) {
-                sf::Vector2i mp = sf::Mouse::getPosition(*g_window);
-                mouseX = (float)mp.x;
-                mouseY = (float)mp.y;
+                _easyx_impl::setLogicalView((float)width, (float)height);
+                sf::Vector2f mp = _easyx_impl::getLogicalMousePosition();
+                mouseX = mp.x;
+                mouseY = mp.y;
             }
         }
 

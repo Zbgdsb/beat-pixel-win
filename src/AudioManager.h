@@ -58,7 +58,7 @@ private:
     static std::vector<int16_t> generateSnare(float duration, int sampleRate, float volume);
     static std::vector<int16_t> generateHihat(float duration, int sampleRate, float volume);
     static std::vector<int16_t> generateTom(float freq, float duration, int sampleRate, float volume);
-    int soundPack = 0; // 0=叮咚 1=打击乐
+    int soundPack = 1; // 0=叮咚 1=打击乐
     std::string m_resourceDir; // 资源目录（exeDir）
     // V3.5: 4轨道独立鼓声音效
     sf::SoundBuffer trackBuffers[6];
@@ -112,7 +112,7 @@ public:
     float getEffectVolume() const { return m_effectVolume; }
 
     // V3.5: 音效包
-    void setSoundPack(int pack) { soundPack = pack; generateSFX(); }
+    void setSoundPack(int pack) { soundPack = (pack == 0) ? 0 : 1; generateSFX(); }
     int getSoundPack() const { return soundPack; }
 
     /**

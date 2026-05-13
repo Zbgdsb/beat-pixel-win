@@ -13,13 +13,17 @@
 #define VK_BACK 0x08
 #define VK_TAB 0x09
 #define VK_CLEAR 0x0C
+#ifndef VK_RETURN
 #define VK_RETURN 0x0D
+#endif
 #define VK_SHIFT 0x10
 #define VK_CONTROL 0x11
 #define VK_MENU 0x12
 #define VK_PAUSE 0x13
 #define VK_CAPITAL 0x14
+#ifndef VK_ESCAPE
 #define VK_ESCAPE 0x1B
+#endif
 #define VK_SPACE 0x20
 #define VK_PRIOR 0x21
 #define VK_NEXT 0x22
@@ -179,12 +183,12 @@ void GameWindow::handleMenuInput() {
 
     // 鼠标点击菜单项：单击直接选中并确认
     if (isMouseClick()) {
-        sf::Vector2i mousePos = sf::Mouse::getPosition(*_easyx_impl::g_window);
-        float mx = (float)mousePos.x;
-        float my = (float)mousePos.y;
+        sf::Vector2f mousePos = _easyx_impl::getLogicalMousePosition();
+        float mx = mousePos.x;
+        float my = mousePos.y;
         float menuX = (float)((width - 300) / 2);
         int menuY = 170;
-        int itemH = 48;
+        int itemH = 42;
 
         for (int i = 0; i < 6; i++) {
             float itemY = (float)(menuY + i * itemH);
@@ -252,6 +256,9 @@ void GameWindow::loadSongForPlaying() {
 
     double speed = getDifficultySpeed();
     for (const auto& [timeMs, track] : noteTimeData) {
+        if (track < 0 || track >= TRACK_COUNT) {
+            continue;
+        }
         auto note = std::make_unique<NormalNote>(
             track, timeMs, JUDGE_Y, speed, TRACK_COLORS[track]
         );
@@ -266,6 +273,62 @@ void GameWindow::loadSongForPlaying() {
         audioManager.generateSyncedBGM(noteTimeData);
     }
     // 不立即开始：等代管选轨确认后再启动
+}
+
+void GameWindow::restartCurrentSong() {
+    audioManager.stopBGM();
+    scoreSystem.reset();
+    tracks.clear();
+    initTracks();
+
+    std::vector<std::pair<long long, int>> restartNotes = noteTimeData;
+    if (restartNotes.empty() && !analysisResult.chart.empty()) {
+        restartNotes = analysisResult.chart;
+    }
+    if (restartNotes.empty() && parseResult.success && !parseResult.noteTimeData.empty()) {
+        restartNotes = parseResult.noteTimeData;
+    }
+
+    if (restartNotes.empty()) {
+        loadDemoSong();
+        audioManager.generateSyncedBGM(noteTimeData);
+    } else {
+        noteTimeData = restartNotes;
+        lastNoteTime = noteTimeData.back().first;
+
+        double speed = getDifficultySpeed();
+        for (const auto& [timeMs, track] : noteTimeData) {
+            if (track < 0 || track >= TRACK_COUNT) {
+                continue;
+            }
+            auto note = std::make_unique<NormalNote>(
+                track, timeMs, JUDGE_Y, speed, TRACK_COLORS[track]
+            );
+            tracks[track]->addNote(std::move(note));
+        }
+
+        if (analysisFilePath.empty() || !audioManager.playOriginalSong(analysisFilePath)) {
+            audioManager.generateSyncedBGM(noteTimeData);
+        }
+    }
+
+    gameStartTime = GetTickCount64();
+    currentTime = 0;
+    lastJudgement = NONE;
+    judgementDisplayTimer = 0;
+    prevCombo = 0;
+    hitAnims.clear();
+    textAnims.clear();
+    particles.clear();
+    missCrossAnims.clear();
+    comboAnim.elapsed = comboAnim.duration;
+    for (int i = 0; i < TRACK_COUNT; i++) {
+        keyPressed[i] = false;
+        keyWasPressed[i] = false;
+        keyGlowAlpha[i] = 0;
+    }
+    gameState = PLAYING;
+    audioManager.playBGM();
 }
 
 void GameWindow::startDelegatedGame() {
@@ -454,16 +517,16 @@ void GameWindow::handleAnalysisInput() {
         bool mpressed = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
         static bool mlast = false;
         if (mpressed && !mlast) {
-            sf::Vector2i mousePos = sf::Mouse::getPosition(*_easyx_impl::g_window);
-            printf("[Analysis] Mouse click at (%d, %d)\n", mousePos.x, mousePos.y);
+            sf::Vector2f mousePos = _easyx_impl::getLogicalMousePosition();
+            printf("[Analysis] Mouse click at (%.0f, %.0f)\n", mousePos.x, mousePos.y);
             fflush(stdout);
         }
         mlast = mpressed;
     }
     if (isMouseClick()) {
-        sf::Vector2i mousePos = sf::Mouse::getPosition(*_easyx_impl::g_window);
-        float mx = (float)mousePos.x;
-        float my = (float)mousePos.y;
+        sf::Vector2f mousePos = _easyx_impl::getLogicalMousePosition();
+        float mx = mousePos.x;
+        float my = mousePos.y;
 
         // 和渲染代码完全一致的布局计算
         float panelW = 700.0f, panelH = 550.0f;
@@ -687,37 +750,7 @@ void GameWindow::handleResultInput() {
 
         if (resultMenuSelection == 0) {
             // 重新开始
-            scoreSystem.reset();
-            tracks.clear();
-            initTracks();
-
-            if (parseResult.success && !parseResult.noteTimeData.empty()) {
-                // 重新加载MP3歌曲
-                double speed = getDifficultySpeed();
-                for (const auto& [timeMs, track] : parseResult.noteTimeData) {
-                    auto note = std::make_unique<NormalNote>(
-                        track, timeMs, JUDGE_Y, speed, TRACK_COLORS[track]
-                    );
-                    tracks[track]->addNote(std::move(note));
-                }
-                noteTimeData = parseResult.noteTimeData;
-                lastNoteTime = parseResult.lastNoteTime;
-            } else {
-                loadDemoSong();
-            }
-
-            audioManager.generateSyncedBGM(noteTimeData);
-            gameStartTime = GetTickCount64();
-            currentTime = 0;
-            lastJudgement = NONE;
-            judgementDisplayTimer = 0;
-            prevCombo = 0;
-            hitAnims.clear();
-            textAnims.clear();
-            comboAnim.elapsed = comboAnim.duration;
-            for (int i = 0; i < 4; i++) { keyPressed[i] = false; keyWasPressed[i] = false; keyGlowAlpha[i] = 0; }
-            gameState = PLAYING;
-            audioManager.playBGM();
+            restartCurrentSong();
         } else {
             // 返回主菜单
             gameState = MENU;
@@ -726,9 +759,9 @@ void GameWindow::handleResultInput() {
 
     // 鼠标点击结算菜单按钮：单击直接执行
     if (isMouseClick()) {
-        sf::Vector2i mousePos = sf::Mouse::getPosition(*_easyx_impl::g_window);
-        float mx = (float)mousePos.x;
-        float my = (float)mousePos.y;
+        sf::Vector2f mousePos = _easyx_impl::getLogicalMousePosition();
+        float mx = mousePos.x;
+        float my = mousePos.y;
 
         float panelW = 600.0f, panelH = 580.0f;
         float panelX = (width - panelW) / 2.0f;
@@ -746,32 +779,7 @@ void GameWindow::handleResultInput() {
                                        scoreSystem.getTotalScore(), scoreSystem.getMaxCombo());
                 if (i == 0) {
                     // 重新开始
-                    scoreSystem.reset();
-                    tracks.clear();
-                    initTracks();
-                    if (parseResult.success && !parseResult.noteTimeData.empty()) {
-                        double speed = getDifficultySpeed();
-                        for (const auto& [timeMs, track] : parseResult.noteTimeData) {
-                            auto note = std::make_unique<NormalNote>(track, timeMs, JUDGE_Y, speed, TRACK_COLORS[track]);
-                            tracks[track]->addNote(std::move(note));
-                        }
-                        noteTimeData = parseResult.noteTimeData;
-                        lastNoteTime = parseResult.lastNoteTime;
-                    } else {
-                        loadDemoSong();
-                    }
-                    audioManager.generateSyncedBGM(noteTimeData);
-                    gameStartTime = GetTickCount64();
-                    currentTime = 0;
-                    lastJudgement = NONE;
-                    judgementDisplayTimer = 0;
-                    prevCombo = 0;
-                    hitAnims.clear();
-                    textAnims.clear();
-                    comboAnim.elapsed = comboAnim.duration;
-                    for (int j = 0; j < 4; j++) { keyPressed[j] = false; keyWasPressed[j] = false; keyGlowAlpha[j] = 0; }
-                    gameState = PLAYING;
-                    audioManager.playBGM();
+                    restartCurrentSong();
                 } else {
                     // 返回主菜单
                     gameState = MENU;
@@ -1110,35 +1118,8 @@ void GameWindow::handlePauseInput() {
             }
             case 1: // 重新开始
             {
-                audioManager.stopBGM();
-                scoreSystem.reset();
-                tracks.clear();
-                initTracks();
-
-                if (parseResult.success && !parseResult.noteTimeData.empty()) {
-                    double speed = getDifficultySpeed();
-                    for (const auto& [timeMs, track] : parseResult.noteTimeData) {
-                        auto note = std::make_unique<NormalNote>(
-                            track, timeMs, JUDGE_Y, speed, TRACK_COLORS[track]
-                        );
-                        tracks[track]->addNote(std::move(note));
-                    }
-                    noteTimeData = parseResult.noteTimeData;
-                    lastNoteTime = parseResult.lastNoteTime;
-                } else {
-                    loadDemoSong();
-                }
-
-                audioManager.generateSyncedBGM(noteTimeData);
-                gameStartTime = GetTickCount64();
-                hitAnims.clear();
-                textAnims.clear();
-                particles.clear();
-                missCrossAnims.clear();
-                comboAnim.elapsed = 0.0f;
                 pauseMenuSelection = 0;
-                gameState = PLAYING;
-                audioManager.playBGM();
+                restartCurrentSong();
                 break;
             }
             case 2: // 返回主菜单
@@ -1152,11 +1133,35 @@ void GameWindow::handlePauseInput() {
         }
     }
 
-    // 鼠标点击暂停菜单按钮：第一次选中，第二次确认
+    auto activatePauseItem = [&](int item) {
+        switch (item) {
+            case 0: {
+                long long pauseDuration = GetTickCount64() - pauseStartTime;
+                gameStartTime += pauseDuration;
+                audioManager.resumeBGM();
+                gameState = PLAYING;
+                break;
+            }
+            case 1: {
+                pauseMenuSelection = 0;
+                restartCurrentSong();
+                break;
+            }
+            case 2: {
+                audioManager.stopBGM();
+                pauseMenuSelection = 0;
+                gameState = MENU;
+                menuJustOpened = true;
+                break;
+            }
+        }
+    };
+
+    // 鼠标点击暂停菜单按钮：单击直接执行，悬停由绘制阶段更新
     if (isMouseClick()) {
-        sf::Vector2i mousePos = sf::Mouse::getPosition(*_easyx_impl::g_window);
-        float mx = (float)mousePos.x;
-        float my = (float)mousePos.y;
+        sf::Vector2f mousePos = _easyx_impl::getLogicalMousePosition();
+        float mx = mousePos.x;
+        float my = mousePos.y;
 
         float panelW = 450.0f, panelH = 380.0f;
         float panelX = (width - panelW) / 2.0f;
@@ -1168,54 +1173,8 @@ void GameWindow::handlePauseInput() {
         for (int i = 0; i < 3; i++) {
             float currentY = buttonY + i * (buttonH + 20.0f);
             if (isPointInRect(mx, my, buttonX, currentY, buttonW, buttonH)) {
-                if (pauseMenuSelection == i) {
-                    // 已选中，再次点击才执行
-                    switch (i) {
-                        case 0: {
-                            long long pauseDuration = GetTickCount64() - pauseStartTime;
-                            gameStartTime += pauseDuration;
-                            audioManager.resumeBGM();
-                            gameState = PLAYING;
-                            break;
-                        }
-                        case 1: {
-                            audioManager.stopBGM();
-                            scoreSystem.reset();
-                            tracks.clear();
-                            initTracks();
-                            if (parseResult.success && !parseResult.noteTimeData.empty()) {
-                                double speed = getDifficultySpeed();
-                                for (const auto& [timeMs, track] : parseResult.noteTimeData) {
-                                    auto note = std::make_unique<NormalNote>(track, timeMs, JUDGE_Y, speed, TRACK_COLORS[track]);
-                                    tracks[track]->addNote(std::move(note));
-                                }
-                                noteTimeData = parseResult.noteTimeData;
-                                lastNoteTime = parseResult.lastNoteTime;
-                            } else {
-                                loadDemoSong();
-                            }
-                            audioManager.generateSyncedBGM(noteTimeData);
-                            gameStartTime = GetTickCount64();
-                            hitAnims.clear();
-                            textAnims.clear();
-                            particles.clear();
-                            missCrossAnims.clear();
-                            comboAnim.elapsed = 0.0f;
-                            pauseMenuSelection = 0;
-                            gameState = PLAYING;
-                            audioManager.playBGM();
-                            break;
-                        }
-                        case 2: {
-                            audioManager.stopBGM();
-                            pauseMenuSelection = 0;
-                            gameState = MENU;
-                            break;
-                        }
-                    }
-                } else {
-                    pauseMenuSelection = i;
-                }
+                pauseMenuSelection = i;
+                activatePauseItem(i);
                 break;
             }
         }
@@ -1511,9 +1470,9 @@ void GameWindow::handleSettingsInput() {
 
     // 鼠标点击设置选项：单击直接执行（音量条直接调整，其他选中并执行）
     if (currentKeySettingIndex < 0 && isMouseClick()) {
-        sf::Vector2i mousePos = sf::Mouse::getPosition(*_easyx_impl::g_window);
-        float mx = (float)mousePos.x;
-        float my = (float)mousePos.y;
+        sf::Vector2f mousePos = _easyx_impl::getLogicalMousePosition();
+        float mx = mousePos.x;
+        float my = mousePos.y;
 
         float panelW = 500.0f, panelH = 620.0f;
         float panelX = (width - panelW) / 2.0f;
@@ -1527,7 +1486,7 @@ void GameWindow::handleSettingsInput() {
             float currentY = optionY + i * optionH - 5.0f;
             if (isPointInRect(mx, my, highlightX, currentY, highlightW, highlightH)) {
                 settingsMenuSelection = i;
-                if (i < 2) {
+                if (i < 3) {
                     // 音量选项：点击位置决定加减
                     float midX = highlightX + highlightW / 2.0f;
                     if (mx < midX) {
@@ -1615,6 +1574,7 @@ void GameWindow::loadConfig(const std::string& path) {
     } else {
         musicVolume = 1.0f;
         effectVolume = 1.0f;
+        audioManager.setSoundPack(1);
         customKeys[0] = 'A'; customKeys[1] = 'S'; customKeys[2] = 'D';
         customKeys[3] = 'F'; customKeys[4] = 'J'; customKeys[5] = 'K';
         saveConfig();
@@ -1712,8 +1672,8 @@ void GameWindow::handleAchievementsInput() {
 
     // 鼠标点击返回
     if (isMouseClick()) {
-        sf::Vector2i mp = sf::Mouse::getPosition(*_easyx_impl::g_window);
-        float mx = (float)mp.x, my = (float)mp.y;
+        sf::Vector2f mp = _easyx_impl::getLogicalMousePosition();
+        float mx = mp.x, my = mp.y;
         float panelW = 600.0f, panelH = 620.0f;
         float panelX = (width - panelW) / 2.0f;
         float panelY = (height - panelH) / 2.0f;
@@ -1889,10 +1849,16 @@ void GameWindow::startSelectedSong(SongListItem& selected) {
     debugLog("startSelectedSong: after SongAnalyzer");
 
     if (analysisResult.success) {
+        analysisResult.metadata.title = selected.name;
         manualBPM = analysisResult.bpm;
         manualOffset = 0;
         analysisDone = true;
         analysisJustOpened = true;
+        std::string chartPath = selected.filePath + ".chart.json";
+        if (SongAnalyzer::exportChart(chartPath, analysisResult)) {
+            selected.hasChart = true;
+            debugLog("startSelectedSong: auto exported chart");
+        }
         gameState = ANALYZING;
     } else {
         // 分析失败（无ffmpeg等）→ 退回歌曲列表
@@ -2039,8 +2005,8 @@ void GameWindow::handleSongListInput() {
 
     // 鼠标点击歌曲列表：单击直接开始
     if (isMouseClick()) {
-        sf::Vector2i mp = sf::Mouse::getPosition(*_easyx_impl::g_window);
-        float mx = (float)mp.x, my = (float)mp.y;
+        sf::Vector2f mp = _easyx_impl::getLogicalMousePosition();
+        float mx = mp.x, my = mp.y;
         float panelW = 500.0f, panelH = 400.0f;
         float panelX = (width - panelW) / 2.0f;
         float panelY = (height - panelH) / 2.0f;
@@ -2109,8 +2075,8 @@ void GameWindow::handleTrackDelegateInput() {
 
     // 鼠标点击
     if (isMouseClick()) {
-        sf::Vector2i mp = sf::Mouse::getPosition(*_easyx_impl::g_window);
-        float mx = (float)mp.x, my = (float)mp.y;
+        sf::Vector2f mp = _easyx_impl::getLogicalMousePosition();
+        float mx = mp.x, my = mp.y;
         float panelW = 450.0f, panelH = 420.0f;
         float panelX = (width - panelW) / 2.0f;
         float panelY = (height - panelH) / 2.0f;

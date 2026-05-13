@@ -15,6 +15,7 @@
 #include <unistd.h>
 #else
 #include <io.h>
+#include <process.h>
 #include <windows.h>
 
 // 优先用exe同目录下的ffmpeg.exe，没有则回退到系统PATH
@@ -23,6 +24,46 @@ static std::string resolveFfmpegPath(const std::string& resourceDir) {
     FILE* fp = fopen(bundled.c_str(), "rb");
     if (fp) { fclose(fp); return bundled; }
     return "ffmpeg";
+}
+
+static std::string quoteSpawnArg(const std::string& arg) {
+    if (arg.find_first_of(" \t\"") == std::string::npos) {
+        return arg;
+    }
+
+    std::string quoted = "\"";
+    int backslashes = 0;
+    for (char ch : arg) {
+        if (ch == '\\') {
+            backslashes++;
+        } else if (ch == '"') {
+            quoted.append(backslashes * 2 + 1, '\\');
+            quoted.push_back(ch);
+            backslashes = 0;
+        } else {
+            quoted.append(backslashes, '\\');
+            backslashes = 0;
+            quoted.push_back(ch);
+        }
+    }
+    quoted.append(backslashes * 2, '\\');
+    quoted.push_back('"');
+    return quoted;
+}
+
+static int runFfmpegDirect(const std::string& ffmpegPath, const std::vector<std::string>& args) {
+    std::vector<const char*> argv;
+    argv.reserve(args.size() + 2);
+    argv.push_back(ffmpegPath.c_str());
+    for (const auto& arg : args) {
+        argv.push_back(arg.c_str());
+    }
+    argv.push_back(nullptr);
+
+    if (ffmpegPath == "ffmpeg") {
+        return _spawnvp(_P_WAIT, ffmpegPath.c_str(), argv.data());
+    }
+    return _spawnv(_P_WAIT, ffmpegPath.c_str(), argv.data());
 }
 #endif
 
@@ -108,7 +149,7 @@ std::vector<int16_t> AudioManager::generateHihat(float duration, int sampleRate,
         seed = seed * 1103515245 + 12345;
         float noise = ((seed >> 16) & 0x7FFF) / 32768.0f - 0.5f;
         // 高通滤波效果：减去低频成分
-        float prev = (i > 0) ? ((seed * 1103515245 + 12345 >> 16 & 0x7FFF) / 32768.0f - 0.5f) : noise;
+        float prev = (i > 0) ? ((((seed * 1103515245u + 12345u) >> 16) & 0x7FFF) / 32768.0f - 0.5f) : noise;
         float hp = noise - prev * 0.3f;
         float value = volume * envelope * hp;
         samples[i] = (int16_t)(value * 32000.0f);
@@ -418,11 +459,18 @@ bool AudioManager::playOriginalSong(const std::string& filePath) {
 
 #ifdef _WIN32
     std::string ffp = resolveFfmpegPath(m_resourceDir);
-    std::string cmd = ffp + " -y -i \"" + filePath + "\" -ar 44100 -ac 2 -f wav \"" + tmpPath + "\" >NUL 2>&1";
+    int ret = runFfmpegDirect(ffp, {
+        "-y",
+        "-i", quoteSpawnArg(filePath),
+        "-ar", "44100",
+        "-ac", "2",
+        "-f", "wav",
+        quoteSpawnArg(tmpPath)
+    });
 #else
     std::string cmd = "ffmpeg -y -i '" + filePath + "' -ar 44100 -ac 2 -f wav '" + tmpPath + "' 2>/dev/null";
-#endif
     int ret = system(cmd.c_str());
+#endif
     if (ret != 0) {
         remove(tmpPath);
         printf("[AudioManager] ffmpeg转换失败\n");

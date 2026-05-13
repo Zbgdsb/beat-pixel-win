@@ -173,7 +173,7 @@ bool GameWindow::loadSongFromMP3(const std::string& filePath) {
 
     // 使用解析结果
     noteTimeData = parseResult.noteTimeData;
-    lastNoteTime = parseResult.lastNoteTime;
+    lastNoteTime = noteTimeData.empty() ? 0 : noteTimeData.back().first;
     currentSongName = filePath;
 
     // 从路径中提取文件名作为歌曲名
@@ -191,6 +191,9 @@ bool GameWindow::loadSongFromMP3(const std::string& filePath) {
 
     // 创建音符对象
     for (const auto& [timeMs, track] : noteTimeData) {
+        if (track < 0 || track >= TRACK_COUNT) {
+            continue;
+        }
         auto note = std::make_unique<NormalNote>(
             track, timeMs, JUDGE_Y, speed, TRACK_COLORS[track]
         );

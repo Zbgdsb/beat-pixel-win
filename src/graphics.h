@@ -258,11 +258,29 @@ namespace _easyx_impl {
     // 窗口是否还开着
     inline bool g_windowOpen = false;
 
+    inline void setLogicalView(float width, float height) {
+        if (!g_window) return;
+        g_window->setView(sf::View(sf::FloatRect({0.0f, 0.0f}, {width, height})));
+    }
+
+    inline sf::Vector2f getLogicalMousePosition() {
+        if (!g_window || !g_windowOpen) return {0.0f, 0.0f};
+        sf::Vector2i pixel = sf::Mouse::getPosition(*g_window);
+        return g_window->mapPixelToCoords(pixel);
+    }
+
     // 加载字体（优先查找系统字体）
     inline bool loadFont() {
         if (g_fontLoaded) return true;
-        // macOS常见中文字体路径
         const char* fontPaths[] = {
+#ifdef _WIN32
+            "C:\\Windows\\Fonts\\msyh.ttc",
+            "C:\\Windows\\Fonts\\msyhbd.ttc",
+            "C:\\Windows\\Fonts\\simhei.ttf",
+            "C:\\Windows\\Fonts\\simsun.ttc",
+            "C:\\Windows\\Fonts\\simkai.ttf",
+            "C:\\Windows\\Fonts\\consola.ttf",
+#else
             "/System/Library/Fonts/STHeiti Medium.ttc",
             "/System/Library/Fonts/Hiragino Sans GB.ttc",
             "/System/Library/Fonts/Menlo.ttc",
@@ -271,6 +289,7 @@ namespace _easyx_impl {
             "C:/Windows/Fonts/simhei.ttf",
             "C:/Windows/Fonts/simsun.ttc",
             "C:/Windows/Fonts/consola.ttf",
+#endif
         };
         for (const char* path : fontPaths) {
             if (g_font.openFromFile(path)) {
@@ -340,6 +359,7 @@ inline void initgraph(int width, int height) {
     if (g_window) { delete g_window; g_window = nullptr; }
     g_window = new sf::RenderWindow(sf::VideoMode({(unsigned)width, (unsigned)height}),
                                      "BeatPixel");
+    setLogicalView((float)width, (float)height);
     g_window->setFramerateLimit(120); // 帧率由游戏主循环控制
     g_windowOpen = true;
     loadFont();

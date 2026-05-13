@@ -255,6 +255,7 @@ private:
     void updateAchievementPopups(float dt);
     std::string getFileNameWithoutExt(const std::string& filePath);
     void loadSongForPlaying();   // V3.2: 加载歌曲进入游戏
+    void restartCurrentSong();   // 使用当前谱面重新开始
     void startDelegatedGame();   // 代管确认后启动游戏
     void loadConfig(const std::string& path = "config.ini"); // 加载本地配置
     void saveConfig();           // 保存本地配置
