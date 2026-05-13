@@ -1871,21 +1871,12 @@ void GameWindow::startSelectedSong(SongListItem& selected) {
     }
 
     // 无预置谱面 → 需要分析MP3（ffmpeg转换+onset检测+BPM分析，可能耗时5-20秒）
-    // V4.0: 先渲染一帧loading提示，避免用户以为卡死
-    songLoading = true;
-    {
-        using namespace _easyx_impl;
-        g_window->clear(sf::Color(0, 0, 0));
-        drawSongListScreen();
-        g_window->display();
-    }
-
+    // V4.0: loading提示已在上一帧由 drawSongListScreen 渲染（songLoading=true 触发）
     analysisFilePath = selected.filePath;
     currentSongName = selected.name;
     SongAnalyzer analyzer;
     analysisResult = analyzer.analyze(selected.filePath);
 
-    songLoading = false;
     if (analysisResult.success) {
         manualBPM = analysisResult.bpm;
         manualOffset = 0;
@@ -1972,6 +1963,17 @@ void GameWindow::handleSongListInput() {
         }
     }
 
+    // V4.0: 上一帧设置了加载标志 → 本帧执行实际加载
+    //       此时窗口已渲染过一帧loading提示（drawSongListScreen 检查 songLoading）
+    if (songLoading) {
+        songLoading = false;
+        if (!songList.empty() && songListSelection >= 0 && songListSelection < (int)songList.size()) {
+            isShowingSongList = false;
+            startSelectedSong(songList[songListSelection]);
+        }
+        return;
+    }
+
     bool escPressed = (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
     bool upPressed = (GetAsyncKeyState('W') & 0x8000) != 0;
     bool downPressed = (GetAsyncKeyState('S') & 0x8000) != 0;
@@ -2013,10 +2015,10 @@ void GameWindow::handleSongListInput() {
         if (songListSelection > maxIdx) songListSelection = 0;
     }
 
+    // V4.0: 只设标志，让本帧渲染loading提示，下一帧才执行 startSelectedSong
     if (enterJust && !songList.empty()) {
-        auto& selected = songList[songListSelection];
-        isShowingSongList = false;
-        startSelectedSong(selected);
+        songLoading = true;
+        return;
     }
 
     // 鼠标点击歌曲列表：单击直接开始
@@ -2033,11 +2035,7 @@ void GameWindow::handleSongListInput() {
             float itemY = startY + i * itemH;
             if (isPointInRect(mx, my, panelX + 20, itemY, panelW - 40, itemH)) {
                 songListSelection = i;
-                if (!songList.empty()) {
-                    auto& selected = songList[songListSelection];
-                    isShowingSongList = false;
-                    startSelectedSong(selected);
-                }
+                songLoading = true;
                 break;
             }
         }
